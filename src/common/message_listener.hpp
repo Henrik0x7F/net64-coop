@@ -1,0 +1,8 @@
+//
+// Created by henrik on 20.02.20.
+//
+
+#ifndef NET64_COOP_MESSAGE_LISTENER_HPP
+#define NET64_COOP_MESSAGE_LISTENER_HPP
+
+#endif //NET64_COOP_MESSAGE_LISTENER_HPP

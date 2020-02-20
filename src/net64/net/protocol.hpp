@@ -42,6 +42,15 @@ struct C_DisconnectCode
     };
 };
 
+/*
+ * Client connect codes are actually the protocol version of the client.
+ * The server rejects the connection request with S_DisconnectCode::INCOMPATIBLE
+ * if the protocol version does not match the server's protocol version.
+ *
+ * A connect code of 0 means the client does not wish to connect but fetch the server info.
+ * The server sends the information and closes the connection afterwards
+ */
+
 std::error_code make_error_code(Net64::Net::S_DisconnectCode::_s_disconnect_code_enum e);
 
 }
