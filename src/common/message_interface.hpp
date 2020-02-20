@@ -9,10 +9,9 @@
 
 #include <cstdint>
 #include <memory>
+#include "common/byte_stream.hpp"
+#include "common/generic_factory.hpp"
 
-
-template<typename, typename, typename>
-struct Factory{};
 
 /**
  * Interface template for message objects
@@ -22,16 +21,16 @@ template<typename Identifier>
 struct IMessage : Factory<IMessage<Identifier>, Identifier, IMessage<Identifier>*>
 {
     /// Type used to distinguish different message types
-    using id_t = Factory::Identifier;
+    using id_t = Identifier;
 
     virtual ~IMessage() = default;
 
-    /// Size of message after being serilized
+    /// Size of message after being serialized
     [[nodiscard]]
-    virtual std::size_t serilized_size() const = 0;
+    virtual std::size_t serialized_size() const = 0;
 
     /// Serialize message into a byte stream
-    virtual void serilize(OutByteStream& strm) const = 0;
+    virtual void serialize(OutByteStream& strm) const = 0;
 
     /// Parse message data from byte stream (without message id)
     virtual void parse(InByteStream& strm) = 0;
@@ -49,7 +48,6 @@ struct IMessage : Factory<IMessage<Identifier>, Identifier, IMessage<Identifier>
         }
         catch(const std::out_of_range& e)
         {
-            //@todo: logging and other exceptiont types?
             message.reset();
         }
 
@@ -59,7 +57,6 @@ struct IMessage : Factory<IMessage<Identifier>, Identifier, IMessage<Identifier>
         }
         catch(const std::exception& e)
         {
-            //@todo
             message.reset();
         }
 
@@ -75,13 +72,13 @@ struct IMessage : Factory<IMessage<Identifier>, Identifier, IMessage<Identifier>
 
     /// Base for all message objects
     template<typename Derived, id_t MESSAGE_ID>
-    struct NewMessage : IMessage<Identifier>::RegisterConst<Derived, MESSAGE_ID>
+    struct Derive : IMessage<Identifier>::template RegisterConst<Derived, MESSAGE_ID>
     {
         static constexpr IMessage<Identifier>::id_t ID{MESSAGE_ID};
 
-        using Base = IMessage<Identifier>::RegisterConst<Derived, ID>;
+        using Base = typename IMessage<Identifier>::template RegisterConst<Derived, ID>;
 
-        /// Implement serilization
+        /// Implement serialization
         void serialize(OutByteStream& strm) const final
         {
             strm << ID << static_cast<const Derived&>(*this);
@@ -95,24 +92,26 @@ struct IMessage : Factory<IMessage<Identifier>, Identifier, IMessage<Identifier>
 
         /// Implement size calculation
         [[nodiscard]]
-        std::size_t serilialized_size() const final
+        std::size_t serialized_size() const final
         {
             std::size_t size{sizeof(id_t)};
-            ::serilized_size(size, static_cast<const Derived&>(*this));
+            ::serialized_size(size, static_cast<const Derived&>(*this));
             return size;
         }
 
     protected:
-        NewMessage():
+        Derive():
             Base(ID)
         {}
     };
 
     template<typename T, id_t>
-    friend struct NewMessage;
+    friend struct Derive;
 
 private:
-    explicit IMessage(id_t id){}
+    explicit IMessage(id_t id):
+        id_{id}
+    {}
 
     id_t id_;
 };

@@ -38,7 +38,15 @@ add_library(net64_core STATIC
         net/errors.hpp
         net/protocol.cpp
         net64.cpp
-        net64.hpp ../common/message_interface.hpp ../common/message_listener.hpp)
+        net64.hpp
+        ../common/message_interface.hpp
+        ../common/message_listener.hpp
+        ../common/generic_factory.hpp
+        ../common/byte_stream.hpp
+        ../common/byte_stream.cpp
+        ../common/byte_ref_buffer.hpp
+        ../common/byte_ref_buffer.cpp
+        ../common/double_dispatch.hpp)
 
 include(ENet)
 include_directories(${ENET_INCLUDES})
