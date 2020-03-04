@@ -51,7 +51,7 @@ private:
 
         void handle_message(const MessageType& msg) final
         {
-            custom_dispatch<Handler, MessageIdPredicate, MessageType&, Messages...>(Handler{static_cast<Derived&>(*this)}, msg);
+            custom_dispatch<Handler, MessageIdPredicate, const MessageType&, Messages...>(Handler{static_cast<Derived&>(*this)}, msg);
         }
     };
 
