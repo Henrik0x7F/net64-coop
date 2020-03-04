@@ -48,5 +48,12 @@ using signed_t = std::conditional<std::is_integral_v<T>,
                      Int<sizeof(T) * 8>>,
                  Assert<false>>;
 
+/// Get signed integer large enough to hold all values of enum T
+template<typename T, typename = std::enable_if_t<std::is_enum_v<T>>>
+using matching_signed_int_t = Int<sizeof(T) * 8>;
+
+/// Get unsigned integer large enough to hold all values of enum T
+template<typename T, typename = std::enable_if_t<std::is_enum_v<T>>>
+using matching_unsigned_int_t = Uint<sizeof(T) * 8>;
 
 } // Common
