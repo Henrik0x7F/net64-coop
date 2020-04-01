@@ -100,6 +100,37 @@ struct IMessage : Factory<IMessage<Identifier>, Identifier, IMessage<Identifier>
         }
 
     protected:
+        void serialization_error_throw(SerializeAction action)
+        {
+            std::string class_name(typeid(*this).name());
+
+            switch(action)
+            {
+            case SerializeAction::CALC_SIZE:
+                throw std::runtime_error("Failed to calculate serialized size of " + class_name);
+            case SerializeAction::PARSE:
+                throw std::runtime_error("Failed to parse message of type " + class_name);
+            case SerializeAction::SERIALIZE:
+                throw std::runtime_error("Failed to serialize message of type " + class_name);
+            }
+        }
+
+        template<typename T>
+        static constexpr bool serializing(const T = T())
+        {
+            return (T::TYPE == SerializeAction::SERIALIZE);
+        }
+        template<typename T>
+        static constexpr bool parsing(const T = T())
+        {
+            return (T::TYPE == SerializeAction::PARSE);
+        }
+        template<typename T>
+        static constexpr bool calculating_size(const T = T())
+        {
+            return (T::TYPE == SerializeAction::CALC_SIZE);
+        }
+
         Derive():
             Base(ID)
         {}
