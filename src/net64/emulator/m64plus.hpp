@@ -10,11 +10,12 @@
 #include <array>
 #include <atomic>
 #include <future>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <optional>
-#include <mutex>
+
 #include "net64/emulator/emulator.hpp"
 #include "net64/emulator/shared_library.hpp"
 #include "net64/logging.hpp"
@@ -28,11 +29,10 @@ class Mupen64Plus;
 namespace M64PTypes
 {
 #include <mupen64plus/m64p_types.h>
-} // M64PTypes
+} // namespace M64PTypes
 
 namespace M64PlusHelper
 {
-
 class Plugin;
 
 /// Mupen64Plus error codes
@@ -54,7 +54,7 @@ enum struct Error
     SYSTEM_FAIL,     ///< A system function call, such as an SDL or file operation, failed
     UNSUPPORTED,     ///< Function call is not supported (ie, core not built with debugger)
     WRONG_TYPE,      ///< A given input type parameter cannot be used for desired operation
-    // Interface errors
+                // Interface errors
     LIB_LOAD_FAILED, ///< Failed to load library file
     INVALID_ADDR,    ///< Tried to access out of bounds memory
     SYM_NOT_FOUND    ///< A symbol required by the API could not be located in the specified module
@@ -68,9 +68,7 @@ std::error_code make_error_code(Error e) noexcept;
 struct PluginInfo
 {
     M64PTypes::m64p_plugin_type type{M64PTypes::M64PLUGIN_NULL};
-    int plugin_version{},
-        api_version{},
-        capabilities{};
+    int plugin_version{}, api_version{}, capabilities{};
     std::string name;
 };
 
@@ -85,19 +83,18 @@ class Core final
     // Function pointer types
     using plugin_get_version_t = Error(CALL*)(M64PTypes::m64p_plugin_type*, int*, int*, const char**, int*);
     using debug_context_t = void*;
-    using debug_callback_t = void(*)(void*, int, const char*);
+    using debug_callback_t = void (*)(void*, int, const char*);
     using state_context_t = void*;
-    using state_callback_t = void(*)(void*, M64PTypes::m64p_core_param, int);
-    using core_startup_t = Error(CALL*)(int, const char*, const char*,
-                                    debug_context_t, debug_callback_t,
-                                    state_context_t, state_callback_t);
+    using state_callback_t = void (*)(void*, M64PTypes::m64p_core_param, int);
+    using core_startup_t = Error(CALL*)(
+        int, const char*, const char*, debug_context_t, debug_callback_t, state_context_t, state_callback_t);
     using core_shutdown_t = Error(CALL*)();
     using core_attach_plugin_t = Error(CALL*)(M64PTypes::m64p_plugin_type, M64PTypes::m64p_dynlib_handle);
     using core_detach_plugin_t = Error(CALL*)(M64PTypes::m64p_plugin_type);
     using core_do_cmd_t = Error(CALL*)(M64PTypes::m64p_command, int, void*);
-    using debug_get_mem_ptr_t = volatile void* (CALL*)(M64PTypes::m64p_dbg_memptr_type);
+    using debug_get_mem_ptr_t = volatile void*(CALL*)(M64PTypes::m64p_dbg_memptr_type);
 
-    using list_config_sections_t = Error(CALL*)(void*, void(*)(void*, const char*));
+    using list_config_sections_t = Error(CALL*)(void*, void (*)(void*, const char*));
     using open_config_section_t = Error(CALL*)(const char*, M64PTypes::m64p_handle*);
     using save_config_file_t = void(CALL*)();
     using set_config_parameter_t = Error(CALL*)(M64PTypes::m64p_handle, const char*, M64PTypes::m64p_type, const void*);
@@ -136,14 +133,16 @@ class Core final
 
     Error do_cmd(M64PTypes::m64p_command cmd, int p1, void* p2);
 
-    void list_config_sections(void* context, void(*callback)(void* context, const char* name));
+    void list_config_sections(void* context, void (*callback)(void* context, const char* name));
 
     M64PTypes::m64p_handle open_config_section(const char* name);
 
     void save_config_file();
 
-    void set_config_parameter(M64PTypes::m64p_handle handle, const char* param_name,
-                              M64PTypes::m64p_type type, const void* data);
+    void set_config_parameter(M64PTypes::m64p_handle handle,
+                              const char* param_name,
+                              M64PTypes::m64p_type type,
+                              const void* data);
 
     void set_state_callback(state_callback_f cb) noexcept;
     void set_debug_callback(debug_callback_f cb) noexcept;
@@ -182,13 +181,12 @@ class Core final
         open_config_section_t open_config_section;
         save_config_file_t save_config_file;
         set_config_parameter_t set_config_parameter;
-    }fn_{};
+    } fn_{};
     PluginInfo info_;
     std::unique_ptr<state_callback_f> state_callback_ = std::make_unique<state_callback_f>();
     std::unique_ptr<debug_callback_f> debug_callback_ = std::make_unique<debug_callback_f>();
 
-    std::string root_path_,
-                data_path_;
+    std::string root_path_, data_path_;
 
     static const std::vector<std::string> FORBIDDEN_HOTKEYS;
 
@@ -203,7 +201,7 @@ class Plugin final
     friend class ::Net64::Emulator::Mupen64Plus;
     friend class ::Net64::Emulator::M64PlusHelper::Core;
 
-public:
+  public:
     /// Non copyable
     Plugin(const Plugin&) = delete;
 
@@ -222,7 +220,7 @@ public:
     /// Get string representation of plugin type id
     static const char* type_str(M64PTypes::m64p_plugin_type type_id);
 
-private:
+  private:
     // Function pointer types
     using plugin_startup_t = Error(CALL*)(M64PTypes::m64p_dynlib_handle, void*, void* (*)(void*, int, const char*));
     using plugin_shutdown_t = Error(CALL*)();
@@ -256,7 +254,7 @@ private:
         plugin_startup_t startup;
         plugin_shutdown_t shutdown;
         plugin_get_version_t get_version;
-    }fn_{};
+    } fn_{};
     PluginInfo info_;
 
     CLASS_LOGGER_("mupen64plus");
@@ -264,14 +262,14 @@ private:
 
 #undef CALL
 
-} // M64PlusHelper
+} // namespace M64PlusHelper
 
 /**
  * Mupen64Plus instance. Only one instance of this class can be alive at a time.
  */
 class Mupen64Plus final : public IEmulator
 {
-public:
+  public:
     using Core = M64PlusHelper::Core;
     using Plugin = M64PlusHelper::Plugin;
     using PluginInfo = M64PlusHelper::PluginInfo;
@@ -301,7 +299,7 @@ public:
 
     void unload_rom() override;
 
-    //void execute(const StateCallback& fn = {}) override;
+    // void execute(const StateCallback& fn = {}) override;
     void start(const StateCallback& fn) override;
 
     void stop() override;
@@ -328,17 +326,14 @@ public:
 
     State state() const override;
 
-    const char* name() const override
-    {
-        return "mupen64plus";
-    }
+    const char* name() const override { return "mupen64plus"; }
 
     bool rom_loaded() const;
 
     /// Check if plugin of a type is already registered
     bool has_plugin(M64PTypes::m64p_plugin_type type) const;
 
-private:
+  private:
     void attach_plugins() noexcept;
     void detach_plugins() noexcept;
     inline static void logical2physical(addr_t& addr);
@@ -384,9 +379,11 @@ private:
     CLASS_LOGGER_("mupen64plus")
 };
 
-} // Net64::Emulator
+} // namespace Net64::Emulator
 
 
 /// Specialization for Mupen64Plus error codes
 template<>
-struct std::is_error_code_enum<::Net64::Emulator::Mupen64Plus::Error> : std::true_type{};
+struct std::is_error_code_enum<::Net64::Emulator::Mupen64Plus::Error> : std::true_type
+{
+};
