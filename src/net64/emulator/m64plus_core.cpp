@@ -239,8 +239,7 @@ void Core::init_core()
     std::string config_path{(fs::path(root_path_) / "config").string()};
 
     ret = fn_.core_startup(API_VERSION, config_path.c_str(), data_path_.c_str(), debug_callback_.get(), debug_callback_c, state_callback_.get(), state_callback_c);
-    if(failed(ret))
-    {
+    if(failed(ret)){
         // Failed to startup core
         auto errc{make_error_code(ret)};
         logger()->error("Failed to start {} v{}, api: {} (capabilities: {:#x}): {}", name_ptr, info_.plugin_version,
