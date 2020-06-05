@@ -21,8 +21,8 @@ add_library(net64_core STATIC
         emulator/m64plus_plugin.cpp
         game/client_messages.hpp
         game/game_messages.hpp
-        game/message_listener.cpp
-        game/message_listener.hpp
+        game/message_handler.cpp
+        game/message_handler.hpp
         game/game_logger.cpp
         game/game_logger.hpp
         game/net64_header.hpp
@@ -47,7 +47,10 @@ add_library(net64_core STATIC
         ../common/resource_handle.hpp
         ../common/shared_object.cpp
         ../common/shared_object.hpp
-        )
+        ../common/double_dispatch.hpp
+        ../common/automatic_factory.hpp
+        ../common/message_handler.hpp
+        ../common/message_interface.hpp net/net_message.hpp net/message_ids.hpp net/messages_client.hpp net/messages_server.hpp net/messages_shared.hpp)
 
 target_compile_options(net64_core PRIVATE ${ADDITIONAL_CXXFLAGS})
 

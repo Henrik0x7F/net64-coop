@@ -5,27 +5,28 @@
 // Refer to the LICENSE file included
 //
 
-#include "game_logger.hpp"
-
 #include <cstring>
+
+#include "game_logger.hpp"
 
 
 namespace Net64::Game
 {
-
 static std::size_t strnlen(const char* str, std::size_t max_len)
 {
     std::size_t len{};
-    for(; len < max_len && str[len] != '\0'; ++len){}
+    for(; len < max_len && str[len] != '\0'; ++len)
+    {
+    }
     return len;
 }
 
 
-GameLogger::GameLogger():
-MessageListener{
-    GameMessage::LOG_APPEND,
-    GameMessage::LOG_END
-}{}
+GameLogger::GameLogger(): MessageHandler{GameMessage::LOG_APPEND, GameMessage::LOG_END}
+
+
+{
+}
 
 void GameLogger::handle_message(const n64_message_t& message)
 {
@@ -41,8 +42,9 @@ void GameLogger::handle_message(const n64_message_t& message)
         logger()->info(text_buf_);
         text_buf_.clear();
         break;
-    default: break;
+    default:
+        break;
     }
 }
 
-}
+} // namespace Net64::Game

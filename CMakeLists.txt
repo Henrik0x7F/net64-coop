@@ -40,6 +40,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install")
 
 if(BUILD_CORE)
+    include_directories(externals/cereal/include)
     add_subdirectory(src/net64)
 endif()
 

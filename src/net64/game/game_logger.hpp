@@ -8,17 +8,17 @@
 #pragma once
 
 #include <string>
-#include "net64/game/message_listener.hpp"
+
+#include "net64/game/message_handler.hpp"
 #include "net64/logging.hpp"
 
 
 namespace Net64::Game
 {
-
 /**
  * Allows SM64 to send log messages into the client's console
  */
-struct GameLogger : MessageListener
+struct GameLogger : MessageHandler
 {
     GameLogger();
 
@@ -30,4 +30,4 @@ private:
     CLASS_LOGGER_("SM64")
 };
 
-}
+} // namespace Net64::Game
