@@ -21,7 +21,7 @@ git_get_exact_tag(GIT_TAG)
 set(GIT_REVISION_FILE "${CMAKE_CURRENT_BINARY_DIR}/src/build_info.cpp")
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/build_info.cpp.in" "${GIT_REVISION_FILE}" @ONLY)
 
-include_directories(src externals externals/mem64/include)
+include_directories(src externals/mem64/include externals/spdlog-lib externals/m64plus-headers)
 
 option(BUILD_CORE "Build core library" ON)
 option(BUILD_QT_FRONTEND "Build the Qt5 userinterface" ON)
