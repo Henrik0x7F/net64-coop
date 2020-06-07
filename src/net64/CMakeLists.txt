@@ -50,7 +50,19 @@ add_library(net64_core STATIC
         ../common/double_dispatch.hpp
         ../common/automatic_factory.hpp
         ../common/message_handler.hpp
-        ../common/message_interface.hpp net/net_message.hpp net/message_ids.hpp net/messages_client.hpp net/messages_server.hpp net/messages_shared.hpp)
+        ../common/message_interface.hpp
+        net/net_message.hpp
+        net/message_ids.hpp
+        net/messages_client.hpp
+        net/messages_server.hpp
+        net/messages_shared.hpp
+        server/player.hpp
+        server/player.cpp
+        server/chat_server.hpp
+        server/chat_server.cpp
+        server/player_manager.hpp
+        server/player_manager.cpp
+        )
 
 target_compile_options(net64_core PRIVATE ${ADDITIONAL_CXXFLAGS})
 

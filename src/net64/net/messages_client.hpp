@@ -14,7 +14,14 @@
 
 namespace Net64::Net
 {
-struct C_ChatMessage : INetMessage::Derive<C_ChatMessage, NetMessageId::CLIENT_CHAT_MESSAGE>
+NET_MESSAGE_(C_Handshake, NetMessageId::CLIENT_HANDSHAKE, Channel::META)
+{
+    std::string name, client_version_str;
+
+    NET_SERIALIZE_(name, client_version_str)
+};
+
+NET_MESSAGE_(C_ChatMessage, NetMessageId::CLIENT_CHAT_MESSAGE, Channel::META)
 {
     std::string message;
 

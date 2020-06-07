@@ -12,8 +12,13 @@ namespace Net64
 {
 enum struct NetMessageId
 {
+    CLIENT_HANDSHAKE,
+    SERVER_HANDSHAKE,
     SERVER_CHAT_MESSAGE, ///< Chat message sent by server to client
-    CLIENT_CHAT_MESSAGE  ///< Chat message from client to server
+    CLIENT_CHAT_MESSAGE, ///< Chat message from client to server
+    SERVER_PLAYER_LIST,
+
+    COUNT
 };
 
 }

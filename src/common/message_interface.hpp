@@ -19,8 +19,8 @@
  * Interface template for message objects
  * @tparam Identifier Type used to distinguish different message types
  */
-template<typename Identifier>
-struct IMessage : Factory<IMessage<Identifier>, Identifier, IMessage<Identifier>*>
+template<typename BaseMessage, typename Identifier>
+struct IMessage : Factory<BaseMessage, Identifier, BaseMessage*>
 {
     /// Type used to distinguish different message types
     using id_t = Identifier;
@@ -28,13 +28,13 @@ struct IMessage : Factory<IMessage<Identifier>, Identifier, IMessage<Identifier>
     virtual ~IMessage() = default;
 
     /// Serialize message into a byte stream
-    virtual void serialize_msg(cereal::PortableBinaryOutputArchive& ar) = 0;
+    virtual void serialize_msg(cereal::PortableBinaryOutputArchive& ar) const = 0;
 
     /// Parse byte stream and construct message object
-    static IMessage<Identifier>* parse_message(std::istream& strm)
+    static BaseMessage* parse_message(std::istream& strm)
     {
         id_t message_id{};
-        std::unique_ptr<IMessage<Identifier>> message;
+        std::unique_ptr<BaseMessage> message;
 
         try
         {
@@ -62,17 +62,17 @@ struct IMessage : Factory<IMessage<Identifier>, Identifier, IMessage<Identifier>
 
     /// Base for all message objects
     template<typename Derived, id_t MESSAGE_ID>
-    struct Derive : IMessage<Identifier>::template RegisterConst<Derived, MESSAGE_ID>
+    struct Derive : BaseMessage::template RegisterConst<Derived, MESSAGE_ID>
     {
-        static constexpr IMessage<Identifier>::id_t ID{MESSAGE_ID};
+        static constexpr typename BaseMessage::id_t ID{MESSAGE_ID};
 
-        using Base = typename IMessage<Identifier>::template RegisterConst<Derived, ID>;
+        using Base = typename BaseMessage::template RegisterConst<Derived, ID>;
 
 
         /// Implement serialization
-        void serialize_msg(cereal::PortableBinaryOutputArchive& ar) final
+        void serialize_msg(cereal::PortableBinaryOutputArchive& ar) const final
         {
-            ar(MESSAGE_ID, static_cast<Derived&>(*this));
+            ar(MESSAGE_ID, static_cast<const Derived&>(*this));
         }
 
         /// Implement parsing
@@ -83,11 +83,18 @@ struct IMessage : Factory<IMessage<Identifier>, Identifier, IMessage<Identifier>
         }
 
     protected:
-        Derive(): Base(ID) {}
+        template<typename... Args>
+        Derive(Args... args): Base(std::forward<Args>(args)...)
+        {
+            this->id_ = ID;
+        }
     };
 
     template<typename T, id_t>
     friend struct Derive;
+
+protected:
+    IMessage() = default;
 
 private:
     /// Parse message data from byte stream (without message id)
@@ -95,5 +102,5 @@ private:
 
     explicit IMessage(id_t id): id_{id} {}
 
-    id_t id_;
+    id_t id_{};
 };

@@ -7,10 +7,15 @@
 
 #pragma once
 
+#include <enet/enet.h>
+
+#include "common/message_handler.hpp"
 #include "common/message_interface.hpp"
 #include "net64/net/message_ids.hpp"
+#include "net64/net/protocol.hpp"
 
 
+#define NET_MESSAGE_(name, id, channel) struct name : NetMessage<name, id, channel>
 #define NET_SERIALIZE_(...) \
     template<typename T>    \
     void serialize(T& a)    \
@@ -20,6 +25,25 @@
 
 namespace Net64
 {
-using INetMessage = IMessage<NetMessageId>;
+struct INetMessage : IMessage<INetMessage, NetMessageId>
+{
+    explicit INetMessage(Net::Channel channel): channel_(channel) {}
 
+    Net::Channel channel() const { return channel_; }
+
+private:
+    Net::Channel channel_;
 };
+
+template<typename Derived, NetMessageId ID, Net::Channel CHANNEL>
+struct NetMessage : INetMessage::Derive<Derived, ID>
+{
+    friend Derived;
+
+private:
+    NetMessage(): INetMessage::Derive<Derived, ID>(CHANNEL) {}
+};
+
+using INetMessageHandler = IMessageHandler<INetMessage, ENetPeer&>;
+
+} // namespace Net64

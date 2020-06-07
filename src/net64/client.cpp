@@ -6,17 +6,17 @@
 //
 
 #include <net64/net/errors.hpp>
+
 #include "client.hpp"
 
 namespace Net64
 {
-
 Client::Client(Memory::MemHandle mem_hdl):
     mem_hdl_{mem_hdl},
     net64_header_{mem_hdl_, mem_hdl_.read<n64_addr_t>(Game::FixedAddr::HEADER_PTR)},
     rcv_queue_{net64_header_->field(&Game::net64_header_t::receive_queue)},
     snd_queue_{net64_header_->field(&Game::net64_header_t::send_queue)},
-    host_{enet_host_create(nullptr, 1, Net::CHANNEL_COUNT, 0, 0)}
+    host_{enet_host_create(nullptr, 1, Net::channel_count(), 0, 0)}
 {
     if(!host_)
         throw std::system_error(make_error_code(Net::Error::ENET_HOST_CREATION));
@@ -24,7 +24,8 @@ Client::Client(Memory::MemHandle mem_hdl):
     if(net64_header_->field(&Game::net64_header_t::compat_version) != Game::CLIENT_COMPAT_VER)
     {
         logger()->error("Incompatible patch version. Patch version: {}, Client version: {}",
-                  net64_header_->field(&Game::net64_header_t::compat_version).read(), Game::CLIENT_COMPAT_VER);
+                        net64_header_->field(&Game::net64_header_t::compat_version).read(),
+                        Game::CLIENT_COMPAT_VER);
         std::abort();
         //@todo: Client error codes
     }
@@ -49,15 +50,14 @@ std::error_code Client::connect(const char* ip, std::uint16_t port)
     }
     addr.port = port;
 
-    PeerHandle peer{enet_host_connect(host_.get(), &addr, Net::CHANNEL_COUNT, Net::PROTO_VER)};
+    PeerHandle peer{enet_host_connect(host_.get(), &addr, Net::channel_count(), Net::PROTO_VER)};
     if(!peer)
     {
         return make_error_code(Net::Error::ENET_PEER_CREATION);
     }
 
     ENetEvent evt;
-    if(enet_host_service(host_.get(), &evt, Net::CONNECT_TIMEOUT) > 0 &&
-       evt.type == ENET_EVENT_TYPE_CONNECT)
+    if(enet_host_service(host_.get(), &evt, Net::CONNECT_TIMEOUT) > 0 && evt.type == ENET_EVENT_TYPE_CONNECT)
     {
         peer_ = std::move(peer);
         on_connect();
@@ -140,22 +140,18 @@ bool Client::game_initialized(Memory::MemHandle mem_hdl)
 
 void Client::on_connect()
 {
-
 }
 
 void Client::on_disconnect()
 {
-
 }
 
 void Client::on_net_message(const ENetPacket& packet)
 {
-
 }
 
 void Client::on_game_message(const Game::MsgQueue::n64_message_t& message)
 {
-
 }
 
-}
+} // namespace Net64

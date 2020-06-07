@@ -20,7 +20,7 @@ struct Factory
 
     friend TBase;
 
-private:
+protected:
     Factory() = default;
 
     struct Shared

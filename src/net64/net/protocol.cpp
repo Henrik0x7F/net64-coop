@@ -10,19 +10,15 @@
 
 namespace
 {
-
 const struct Net64ServerDisconnectCodeCategory : std::error_category
 {
-    const char* name() const noexcept override
-    {
-        return "net64_server_disconnect_code";
-    }
+    const char* name() const noexcept override { return "net64_server_disconnect_code"; }
 
     std::string message(int ev) const override
     {
         using namespace Net64::Net;
 
-        switch(static_cast<S_DisconnectCode::_s_disconnect_code_enum>(ev))
+        switch(static_cast<S_DisconnectCode>(ev))
         {
         case S_DisconnectCode::INCOMPATIBLE:
             return "Server runs an incompatible version";
@@ -39,16 +35,24 @@ const struct Net64ServerDisconnectCodeCategory : std::error_category
         return "[Unkown Error]";
     }
 
-}g_s_disconnect_code_category;
+} g_s_disconnect_code_category;
 
-} // anonymous
+} // namespace
 
 namespace Net64::Net
 {
-
-std::error_code make_error_code(Net64::Net::S_DisconnectCode::_s_disconnect_code_enum e)
+std::error_code make_error_code(Net64::Net::S_DisconnectCode e)
 {
     return {static_cast<int>(e), g_s_disconnect_code_category};
 }
 
+std::uint8_t channel_count()
+{
+    return static_cast<std::uint8_t>(Channel::COUNT);
 }
+std::uint32_t channel_flags(Channel channel)
+{
+    return CHANNEL_FLAGS[static_cast<std::size_t>(channel)];
+}
+
+} // namespace Net64::Net

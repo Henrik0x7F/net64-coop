@@ -5,14 +5,13 @@
 // Refer to the LICENSE file included
 //
 
-#include "server.hpp"
-
 #include "net64/net/errors.hpp"
+#include "net64/server/player.hpp"
+#include "server.hpp"
 
 
 namespace Net64
 {
-
 template<typename Fn>
 static void iterate_peers(ENetHost& host, const Fn& fn)
 {
@@ -26,7 +25,7 @@ static void iterate_peers(ENetHost& host, const Fn& fn)
 Server::Server(std::uint16_t port, std::size_t max_clients)
 {
     ENetAddress addr{ENET_HOST_ANY, port};
-    host_.reset(enet_host_create(&addr, max_clients, Net::CHANNEL_COUNT, 0, 0));
+    host_.reset(enet_host_create(&addr, max_clients, Net::channel_count(), 0, 0));
 
     if(!host_)
     {
@@ -45,21 +44,23 @@ void Server::set_port(std::uint16_t port)
     addr.port = port;
     auto max_clients{host_->peerCount};
     reset_all();
-    host_.reset(enet_host_create(&addr, max_clients, Net::CHANNEL_COUNT, 0, 0));
+    host_.reset(enet_host_create(&addr, max_clients, Net::channel_count(), 0, 0));
 }
 
 void Server::set_max_clients(std::size_t max_clients)
 {
     auto addr{host_->address};
     reset_all();
-    host_.reset(enet_host_create(&addr, max_clients, Net::CHANNEL_COUNT, 0, 0));
+    host_.reset(enet_host_create(&addr, max_clients, Net::channel_count(), 0, 0));
 }
 
 void Server::tick(std::chrono::milliseconds max_tick_time)
 {
     auto tick_start{Clock::now()};
-    for(ENetEvent evt{}; enet_host_service(host_.get(), &evt, Net::SERVER_SERVICE_WAIT) > 0
-        && max_tick_time.count() == 0 ? true : Clock::now() - tick_start < max_tick_time;)
+    for(ENetEvent evt{};
+        enet_host_service(host_.get(), &evt, Net::SERVER_SERVICE_WAIT) > 0 && max_tick_time.count() == 0 ?
+            true :
+            Clock::now() - tick_start < max_tick_time;)
     {
         switch(evt.type)
         {
@@ -68,16 +69,16 @@ void Server::tick(std::chrono::milliseconds max_tick_time)
             {
                 if(evt.data != Net::PROTO_VER)
                 {
-                    enet_peer_disconnect(evt.peer, Net::S_DisconnectCode::INCOMPATIBLE);
+                    enet_peer_disconnect(evt.peer, static_cast<std::uint32_t>(Net::S_DisconnectCode::INCOMPATIBLE));
                     break;
                 }
-                client(*evt.peer) = new client_t;
-                client(*evt.peer)->connect_time = Clock::now();
+                player(*evt.peer) = new Player(*this, *evt.peer);
+                player(*evt.peer)->connect_time = Clock::now();
                 on_connect(*evt.peer, evt.data);
             }
             else
             {
-                enet_peer_disconnect_now(evt.peer, Net::S_DisconnectCode::NOT_ACCEPTED);
+                enet_peer_disconnect_now(evt.peer, static_cast<std::uint32_t>(Net::S_DisconnectCode::NOT_ACCEPTED));
             }
             break;
         case ENET_EVENT_TYPE_DISCONNECT:
@@ -86,12 +87,11 @@ void Server::tick(std::chrono::milliseconds max_tick_time)
             on_disconnect(*evt.peer, evt.data);
             destroy_client(*evt.peer);
             break;
-        case ENET_EVENT_TYPE_RECEIVE:
-            {
+        case ENET_EVENT_TYPE_RECEIVE: {
             PacketHandle packet{evt.packet};
             on_net_message(*evt.packet);
             break;
-            }
+        }
         }
     }
 }
@@ -106,7 +106,36 @@ const bool& Server::accept_new_peers() const
     return accept_new_;
 }
 
-std::size_t Server::max_clients() const
+void Server::send(ENetPeer& peer, const INetMessage& msg)
+{
+    std::ostringstream strm;
+    cereal::PortableBinaryOutputArchive ar(strm);
+
+    msg.serialize_msg(ar);
+
+    PacketHandle packet(enet_packet_create(strm.str().data(), strm.str().size(), Net::channel_flags(msg.channel())));
+
+    enet_peer_send(&peer, static_cast<std::uint8_t>(msg.channel()), packet.release());
+}
+
+void Server::broadcast(const INetMessage& msg)
+{
+    std::ostringstream strm;
+    cereal::PortableBinaryOutputArchive ar(strm);
+
+    msg.serialize_msg(ar);
+
+    PacketHandle packet(enet_packet_create(strm.str().data(), strm.str().size(), Net::channel_flags(msg.channel())));
+
+    enet_host_broadcast(host_.get(), static_cast<std::uint8_t>(msg.channel()), packet.release());
+}
+
+void Server::disconnect(ENetPeer& peer, Net::S_DisconnectCode reason)
+{
+    enet_peer_disconnect(&peer, static_cast<std::uint32_t>(reason));
+}
+
+std::size_t Server::max_peers() const
 {
     return host_->peerCount;
 }
@@ -116,18 +145,14 @@ std::uint16_t Server::port() const
     return host_->address.port;
 }
 
-void Server::disconnect_all(std::uint32_t code)
+void Server::disconnect_all(Net::S_DisconnectCode code)
 {
-    iterate_peers(*host_, [code](auto peer)
-    {
-        enet_peer_disconnect(peer, code);
-    });
+    iterate_peers(*host_, [code](auto peer) { enet_peer_disconnect(peer, static_cast<std::uint32_t>(code)); });
 }
 
 void Server::reset_all()
 {
-    iterate_peers(*host_, [this](auto peer)
-    {
+    iterate_peers(*host_, [this](auto peer) {
         destroy_client(*peer);
         enet_peer_reset(peer);
     });
@@ -140,28 +165,25 @@ std::size_t Server::connected_peers() const
 
 void Server::on_connect(ENetPeer& peer, std::uint32_t userdata)
 {
-
 }
 
 void Server::on_disconnect(ENetPeer& peer, std::uint32_t userdata)
 {
-
 }
 
 void Server::on_net_message(const ENetPacket& packet)
 {
-
 }
 
 void Server::destroy_client(ENetPeer& peer)
 {
-    delete client(peer);
-    client(peer) = nullptr;
+    delete player(peer);
+    player(peer) = nullptr;
 }
 
-Server::client_t*& Server::client(ENetPeer& peer)
+Player*& Server::player(ENetPeer& peer)
 {
-    return *reinterpret_cast<client_t**>(&peer.data);
+    return *reinterpret_cast<Player**>(&peer.data);
 }
 
-}
+} // namespace Net64
