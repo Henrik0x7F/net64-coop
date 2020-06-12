@@ -53,12 +53,16 @@ using ServerMessageHandler = IMessageHandler<INetMessage, Server&, Player&>;
 
 struct ServerConnectionEventHandler
 {
+    virtual ~ServerConnectionEventHandler() = default;
+
     virtual void on_connect(Server&, Player&) {}
     virtual void on_disconnect(Server&, Player&, Net::C_DisconnectCode) {}
 };
 
 struct ServerTickHandler
 {
+    virtual ~ServerTickHandler() = default;
+
     virtual void on_tick(Server& server) = 0;
 };
 

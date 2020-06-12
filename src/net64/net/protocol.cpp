@@ -30,6 +30,10 @@ const struct Net64ServerDisconnectCodeCategory : std::error_category
             return "You have been kicked from this server";
         case S_DisconnectCode::SERVER_SHUTDOWN:
             return "Server is shutting down";
+        case S_DisconnectCode::PROTOCOL_VIOLATION:
+            return "Protocol violation";
+        case S_DisconnectCode::SERVER_FULL:
+            return "Server is full";
         }
 
         return "[Unkown Error]";
