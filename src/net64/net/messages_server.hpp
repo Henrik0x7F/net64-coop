@@ -45,4 +45,20 @@ NET_MESSAGE_(S_PlayerList, NetMessageId::SERVER_PLAYER_LIST, Channel::META)
     NET_SERIALIZE_(players)
 };
 
+NET_MESSAGE_(S_ClientDisconnected, NetMessageId::SERVER_CLIENT_DISCONNECTED, Channel::META)
+{
+    player_id_t player;
+    Net::C_DisconnectCode disconnect_code;
+
+    NET_SERIALIZE_(player, disconnect_code)
+};
+
+NET_MESSAGE_(S_ClientConnected, NetMessageId::SERVER_CLIENT_CONNECTED, Channel::META)
+{
+    player_id_t id;
+    std::string name;
+
+    NET_SERIALIZE_(id, name)
+};
+
 } // namespace Net64::Net

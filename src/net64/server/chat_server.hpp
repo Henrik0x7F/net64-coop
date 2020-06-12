@@ -14,9 +14,9 @@
 
 namespace Net64
 {
-struct ChatServer : INetMessageHandler::Derive<ChatServer>::Receive<Net::C_ChatMessage>
+struct ChatServer : ServerMessageHandler::Derive<ChatServer>::Receive<Net::C_ChatMessage>
 {
-    void on_message(const Net::C_ChatMessage& msg, ENetPeer& sender);
+    void on_message(const Net::C_ChatMessage& msg, Server& server, Player& sender);
 };
 
 } // namespace Net64

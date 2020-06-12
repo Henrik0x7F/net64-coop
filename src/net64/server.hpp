@@ -11,9 +11,10 @@
 #include <map>
 #include <memory>
 
-#include <common/resource_handle.hpp>
 #include <enet/enet.h>
 
+#include "common/id_manager.hpp"
+#include "common/resource_handle.hpp"
 #include "net64/logging.hpp"
 #include "net64/net/net_message.hpp"
 #include "net64/net/protocol.hpp"
@@ -23,56 +24,83 @@ namespace Net64
 {
 struct Player;
 
-// @todo: error codes
 struct Server
 {
+    // Types
     using Clock = std::chrono::steady_clock;
     using peer_id_t = std::uintptr_t;
     using HostHandle = ResourceHandle<&enet_host_destroy>;
     using PacketHandle = ResourceHandle<&enet_packet_destroy>;
 
-    Server(std::uint16_t port, std::size_t max_clients);
-
+    //
+    Server(std::uint16_t port, std::size_t max_peers);
     ~Server();
-
     Server(const Server&) = delete;
     Server& operator=(const Server&) = delete;
 
-    void set_port(std::uint16_t port);
+    // Update
+    void tick();
 
-    void set_max_clients(std::size_t max_clients);
-
-    void tick(std::chrono::milliseconds max_tick_time = std::chrono::milliseconds(0));
-
-    [[nodiscard]] bool& accept_new_peers();
-    [[nodiscard]] const bool& accept_new_peers() const;
-
+    // Connection
+    static void send(ENetPeer& peer, const INetMessage& msg);
     void broadcast(const INetMessage& msg);
-
+    static void disconnect(ENetPeer& peer, Net::S_DisconnectCode reason);
     void disconnect_all(Net::S_DisconnectCode code);
     void reset_all();
 
+    // Set properties
+    void set_max_peers(std::size_t max_peers);
+    void accept_new(bool v);
+
+    // Get properties
     [[nodiscard]] std::size_t connected_peers() const;
-
     [[nodiscard]] std::size_t max_peers() const;
-
     [[nodiscard]] std::uint16_t port() const;
+    [[nodiscard]] bool accept_new() const;
 
-    static void send(ENetPeer& peer, const INetMessage& msg);
+    Player& player(ENetPeer& peer);
 
-    static void disconnect(ENetPeer& peer, Net::S_DisconnectCode reason);
-
-    static Player*& player(ENetPeer& peer);
+    static constexpr std::size_t ALLOCATED_PEERS{32};
 
 private:
-    void on_connect(ENetPeer& peer, std::uint32_t userdata);
-    void on_disconnect(ENetPeer& peer, std::uint32_t userdata);
-    void on_net_message(const ENetPacket& packet);
+    void destroy_player(ENetPeer& peer);
 
-    void destroy_client(ENetPeer& peer);
+    // Events
+    void on_connect(ENetPeer& peer);
+    void on_disconnect(ENetPeer& peer, Net::C_DisconnectCode code);
+    void on_net_message(const ENetPacket& packet, ENetPeer& sender);
+
+    template<typename T>
+    void add_component(T* component)
+    {
+        components_.emplace_back(component, [](void* component) { delete reinterpret_cast<T*>(component); });
+
+        if constexpr(std::is_base_of_v<ServerMessageHandler, T>)
+            message_handlers_.push_back(component);
+        if constexpr(std::is_base_of_v<ServerConnectionEventHandler, T>)
+            connection_event_handlers_.push_back(component);
+        if constexpr(std::is_base_of_v<ServerTickHandler, T>)
+            tick_handlers_.push_back(component);
+    }
+
 
     HostHandle host_;
     bool accept_new_{true};
+    std::size_t max_peers_;
+
+    std::unordered_map<std::uintptr_t, std::unique_ptr<Player>> players_;
+    IdManager<std::uintptr_t> peer_ids_;
+
+    // Server components
+    struct ComponentPtr
+    {
+        void* component;
+        void (*deleter)(void*);
+    };
+    std::vector<ComponentPtr> components_;
+    std::vector<ServerMessageHandler*> message_handlers_;
+    std::vector<ServerConnectionEventHandler*> connection_event_handlers_;
+    std::vector<ServerTickHandler*> tick_handlers_;
 
     CLASS_LOGGER_("server")
 };

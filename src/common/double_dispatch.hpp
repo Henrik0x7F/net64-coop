@@ -112,7 +112,7 @@ public:
      * @return True if a matching concrete function for the runtime type of param was found
      */
     template<typename Handler, typename Predicate, typename BaseType, typename... ConcreteTypes>
-    static bool custom_dispatch(Handler handler, BaseType param, Predicate pred = Predicate(), UsrArgs... args)
+    static bool custom_dispatch(Handler handler, BaseType param, Predicate pred, UsrArgs... args)
     {
         return double_dispatch<Handler, Predicate, BaseType, ConcreteTypes...>(
             handler, param, pred, std::forward<UsrArgs>(args)...);

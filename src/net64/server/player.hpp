@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "common/id_manager.hpp"
 #include "net64/server.hpp"
 
 
@@ -16,14 +17,17 @@ struct Player
 {
     Player(Server& server, ENetPeer& peer);
 
-    Server::Clock::time_point connect_time{};
-    Net::player_id_t player_id{};
-    std::string name{};
-
     bool handshaked() const;
     void disconnect(Net::S_DisconnectCode reason);
     void send(const INetMessage& msg);
     void broadcast(const INetMessage& msg);
+
+    ENetPeer& peer();
+
+
+    Server::Clock::time_point connect_time{};
+    IdHandle<Net::player_id_t> id{};
+    std::string name{};
 
 private:
     Server* server_{};

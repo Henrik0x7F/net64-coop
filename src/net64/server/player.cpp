@@ -15,7 +15,7 @@ Player::Player(Server& server, ENetPeer& peer): server_(&server), peer_(&peer)
 
 bool Player::handshaked() const
 {
-    return !name.empty();
+    return id.has_id();
 }
 
 void Player::disconnect(Net::S_DisconnectCode reason)

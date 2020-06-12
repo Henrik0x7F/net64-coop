@@ -44,7 +44,7 @@ struct IMessage : Factory<BaseMessage, Identifier, BaseMessage*>
             ar(message_id);
 
             // Construct message object
-            message.reset(make(message_id));
+            message.reset(IMessage::make(message_id));
 
             // Parse message
             message->parse_msg(ar);

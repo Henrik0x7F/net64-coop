@@ -16,6 +16,8 @@
 
 namespace Net64::Net
 {
+std::string format_ip4(ENetAddress addr);
+
 constexpr std::uint32_t CONNECT_TIMEOUT{5000}, // ms
     DISCONNECT_TIMEOUT{3000},                  // ms
     CLIENT_SERVICE_WAIT{100},                  // ms
@@ -47,7 +49,9 @@ enum struct S_DisconnectCode
     BANNED,
     SERVER_SHUTDOWN,
     NOT_ACCEPTED,
-    INCOMPATIBLE
+    INCOMPATIBLE,
+    PROTOCOL_VIOLATION,
+    SERVER_FULL
 };
 
 enum struct C_DisconnectCode

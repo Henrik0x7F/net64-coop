@@ -17,6 +17,8 @@ enum struct NetMessageId
     SERVER_CHAT_MESSAGE, ///< Chat message sent by server to client
     CLIENT_CHAT_MESSAGE, ///< Chat message from client to server
     SERVER_PLAYER_LIST,
+    SERVER_CLIENT_DISCONNECTED,
+    SERVER_CLIENT_CONNECTED,
 
     COUNT
 };

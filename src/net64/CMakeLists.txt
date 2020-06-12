@@ -62,7 +62,7 @@ add_library(net64_core STATIC
         server/chat_server.cpp
         server/player_manager.hpp
         server/player_manager.cpp
-        )
+        ../common/id_manager.hpp)
 
 target_compile_options(net64_core PRIVATE ${ADDITIONAL_CXXFLAGS})
 

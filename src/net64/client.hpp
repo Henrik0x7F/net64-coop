@@ -9,16 +9,39 @@
 
 #include <memory>
 
-#include <common/resource_handle.hpp>
 #include <enet/enet.h>
 
+#include "common/resource_handle.hpp"
+#include "net/net_message.hpp"
+#include "net64/game/game_logger.hpp"
 #include "net64/game/msg_queue.hpp"
 #include "net64/game/net64_header.hpp"
 #include "net64/memory/pointer.hpp"
 #include "net64/net/errors.hpp"
+#include "net64/net/messages_server.hpp"
 #include "net64/net/protocol.hpp"
 #include "types.hpp"
 
+
+namespace Net64
+{
+enum struct ClientError
+{
+    INCOMPATIBLE_GAME = 1
+};
+
+std::error_code make_error_code(Net64::ClientError e);
+
+} // namespace Net64
+
+namespace std
+{
+template<>
+struct is_error_code_enum<Net64::ClientError> : std::true_type
+{
+};
+
+} // namespace std
 
 namespace Net64
 {
@@ -26,11 +49,18 @@ struct Client
 {
     using HostHandle = ResourceHandle<&enet_host_destroy>;
     using PeerHandle = ResourceHandle<&enet_peer_reset>;
+    using PacketHandle = ResourceHandle<&enet_packet_destroy>;
+
+    using ChatCallback = std::function<void(const std::string& sender, const std::string& msg)>;
 
     explicit Client(Memory::MemHandle mem_hdl);
 
+    void set_chat_callback(ChatCallback fn);
+
     std::error_code connect(const char* ip, std::uint16_t port);
     void disconnect();
+
+    void send(const INetMessage& msg);
 
     void tick();
 
@@ -54,6 +84,9 @@ private:
     HostHandle host_;
     PeerHandle peer_;
     std::uint32_t disconnect_code_{};
+    ChatCallback chat_callback_;
+
+    Game::GameLogger game_logger_;
 
     CLASS_LOGGER_("client")
 };

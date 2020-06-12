@@ -26,13 +26,16 @@ Client::Client(Memory::MemHandle mem_hdl):
         logger()->error("Incompatible patch version. Patch version: {}, Client version: {}",
                         net64_header_->field(&Game::net64_header_t::compat_version).read(),
                         Game::CLIENT_COMPAT_VER);
-        std::abort();
-        //@todo: Client error codes
+        throw std::system_error(make_error_code(Net64::ClientError::INCOMPATIBLE_GAME));
     }
 
     logger()->info("Initialized Net64 client version {} (Compatibility: {})",
                    net64_header_->field(&Game::net64_header_t::version).read(),
                    net64_header_->field(&Game::net64_header_t::compat_version).read());
+}
+
+void Client::set_chat_callback(std::function<void(const std::string&, const std::string&)> fn)
+{
 }
 
 std::error_code Client::connect(const char* ip, std::uint16_t port)
@@ -148,10 +151,68 @@ void Client::on_disconnect()
 
 void Client::on_net_message(const ENetPacket& packet)
 {
+    std::istringstream strm;
+
+    strm.str({reinterpret_cast<const char*>(packet.data), packet.dataLength});
+
+    std::unique_ptr<INetMessage> msg{INetMessage::parse_message(strm)};
+
+    if(!msg)
+        return;
 }
 
 void Client::on_game_message(const Game::MsgQueue::n64_message_t& message)
 {
+    game_logger_.push_message(message);
+}
+
+void Client::send(const INetMessage& msg)
+{
+    if(!peer_)
+        return;
+
+    std::ostringstream strm;
+    {
+        cereal::PortableBinaryOutputArchive ar(strm);
+
+        msg.serialize_msg(ar);
+    }
+
+    PacketHandle packet(enet_packet_create(strm.str().data(), strm.str().size(), Net::channel_flags(msg.channel())));
+
+    enet_peer_send(peer_.get(), static_cast<std::uint8_t>(msg.channel()), packet.release());
+}
+
+} // namespace Net64
+
+namespace
+{
+static const struct Net64ClientErrorCategory : std::error_category
+{
+    const char* name() const noexcept override { return "net64_client_error"; }
+
+    std::string message(int ev) const override
+    {
+        using namespace Net64;
+
+        switch(static_cast<ClientError>(ev))
+        {
+        case ClientError::INCOMPATIBLE_GAME:
+            return "Game is incompatible with client";
+        }
+
+        return "[Unkown Error]";
+    }
+
+} net64_client_error_category_l;
+
+} // namespace
+
+namespace Net64
+{
+std::error_code make_error_code(Net64::ClientError e)
+{
+    return {static_cast<int>(e), net64_client_error_category_l};
 }
 
 } // namespace Net64

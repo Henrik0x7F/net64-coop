@@ -7,111 +7,89 @@
 
 #include "net64/net/errors.hpp"
 #include "net64/server/player.hpp"
+#include "net64/server/player_manager.hpp"
 #include "server.hpp"
 
 
 namespace Net64
 {
-template<typename Fn>
-static void iterate_peers(ENetHost& host, const Fn& fn)
+Server::Server(std::uint16_t port, std::size_t max_peers)
 {
-    for(std::size_t i{}; i < host.peerCount; ++i)
-    {
-        if(host.peers[i].state != ENET_PEER_STATE_DISCONNECTED)
-            fn(host.peers + i);
-    }
-}
-
-Server::Server(std::uint16_t port, std::size_t max_clients)
-{
+    max_peers_ = max_peers;
     ENetAddress addr{ENET_HOST_ANY, port};
-    host_.reset(enet_host_create(&addr, max_clients, Net::channel_count(), 0, 0));
+    host_.reset(enet_host_create(&addr, ALLOCATED_PEERS, Net::channel_count(), 0, 0));
 
     if(!host_)
-    {
         throw std::system_error(make_error_code(Net::Error::ENET_HOST_CREATION));
-    }
 }
 
 Server::~Server()
 {
+    message_handlers_.clear();
+    connection_event_handlers_.clear();
+    tick_handlers_.clear();
+
+    for(auto& iter : components_)
+    {
+        iter.deleter(iter.component);
+    }
+
     reset_all();
 }
 
-void Server::set_port(std::uint16_t port)
+void Server::tick()
 {
-    auto addr{host_->address};
-    addr.port = port;
-    auto max_clients{host_->peerCount};
-    reset_all();
-    host_.reset(enet_host_create(&addr, max_clients, Net::channel_count(), 0, 0));
-}
-
-void Server::set_max_clients(std::size_t max_clients)
-{
-    auto addr{host_->address};
-    reset_all();
-    host_.reset(enet_host_create(&addr, max_clients, Net::channel_count(), 0, 0));
-}
-
-void Server::tick(std::chrono::milliseconds max_tick_time)
-{
-    auto tick_start{Clock::now()};
-    for(ENetEvent evt{};
-        enet_host_service(host_.get(), &evt, Net::SERVER_SERVICE_WAIT) > 0 && max_tick_time.count() == 0 ?
-            true :
-            Clock::now() - tick_start < max_tick_time;)
+    for(ENetEvent evt{}; enet_host_service(host_.get(), &evt, Net::SERVER_SERVICE_WAIT) > 0;)
     {
         switch(evt.type)
         {
         case ENET_EVENT_TYPE_CONNECT:
-            if(accept_new_)
+            if(!accept_new_)
             {
-                if(evt.data != Net::PROTO_VER)
-                {
-                    enet_peer_disconnect(evt.peer, static_cast<std::uint32_t>(Net::S_DisconnectCode::INCOMPATIBLE));
-                    break;
-                }
-                player(*evt.peer) = new Player(*this, *evt.peer);
-                player(*evt.peer)->connect_time = Clock::now();
-                on_connect(*evt.peer, evt.data);
+                enet_peer_disconnect(evt.peer, static_cast<std::uint32_t>(Net::S_DisconnectCode::NOT_ACCEPTED));
+                break;
             }
-            else
+            if(host_->connectedPeers >= max_peers_)
             {
-                enet_peer_disconnect_now(evt.peer, static_cast<std::uint32_t>(Net::S_DisconnectCode::NOT_ACCEPTED));
+                enet_peer_disconnect(evt.peer, static_cast<std::uint32_t>(Net::S_DisconnectCode::SERVER_FULL));
+                break;
             }
+            if(evt.data != Net::PROTO_VER)
+            {
+                enet_peer_disconnect(evt.peer, static_cast<std::uint32_t>(Net::S_DisconnectCode::INCOMPATIBLE));
+                break;
+            }
+            evt.peer->data = reinterpret_cast<void*>(peer_ids_.acquire_id());
+            players_[reinterpret_cast<std::uintptr_t>(evt.peer->data)] = std::make_unique<Player>(*this, *evt.peer);
+            on_connect(*evt.peer);
             break;
         case ENET_EVENT_TYPE_DISCONNECT:
             if(!evt.peer->data)
                 break;
-            on_disconnect(*evt.peer, evt.data);
-            destroy_client(*evt.peer);
+            on_disconnect(*evt.peer, static_cast<Net::C_DisconnectCode>(evt.data));
+            destroy_player(*evt.peer);
             break;
-        case ENET_EVENT_TYPE_RECEIVE: {
-            PacketHandle packet{evt.packet};
-            on_net_message(*evt.packet);
+        case ENET_EVENT_TYPE_RECEIVE:
+            PacketHandle packet(evt.packet);
+            on_net_message(*packet, *evt.peer);
             break;
-        }
         }
     }
-}
 
-bool& Server::accept_new_peers()
-{
-    return accept_new_;
-}
-
-const bool& Server::accept_new_peers() const
-{
-    return accept_new_;
+    for(auto handler : tick_handlers_)
+    {
+        handler->on_tick(*this);
+    }
 }
 
 void Server::send(ENetPeer& peer, const INetMessage& msg)
 {
     std::ostringstream strm;
-    cereal::PortableBinaryOutputArchive ar(strm);
+    {
+        cereal::PortableBinaryOutputArchive ar(strm);
 
-    msg.serialize_msg(ar);
+        msg.serialize_msg(ar);
+    }
 
     PacketHandle packet(enet_packet_create(strm.str().data(), strm.str().size(), Net::channel_flags(msg.channel())));
 
@@ -121,9 +99,11 @@ void Server::send(ENetPeer& peer, const INetMessage& msg)
 void Server::broadcast(const INetMessage& msg)
 {
     std::ostringstream strm;
-    cereal::PortableBinaryOutputArchive ar(strm);
+    {
+        cereal::PortableBinaryOutputArchive ar(strm);
 
-    msg.serialize_msg(ar);
+        msg.serialize_msg(ar);
+    }
 
     PacketHandle packet(enet_packet_create(strm.str().data(), strm.str().size(), Net::channel_flags(msg.channel())));
 
@@ -135,27 +115,32 @@ void Server::disconnect(ENetPeer& peer, Net::S_DisconnectCode reason)
     enet_peer_disconnect(&peer, static_cast<std::uint32_t>(reason));
 }
 
-std::size_t Server::max_peers() const
-{
-    return host_->peerCount;
-}
-
-std::uint16_t Server::port() const
-{
-    return host_->address.port;
-}
-
 void Server::disconnect_all(Net::S_DisconnectCode code)
 {
-    iterate_peers(*host_, [code](auto peer) { enet_peer_disconnect(peer, static_cast<std::uint32_t>(code)); });
+    for(auto& player : players_)
+    {
+        player.second->disconnect(code);
+    }
 }
 
 void Server::reset_all()
 {
-    iterate_peers(*host_, [this](auto peer) {
-        destroy_client(*peer);
-        enet_peer_reset(peer);
-    });
+    for(auto& player : players_)
+    {
+        enet_peer_reset(&player.second->peer());
+    }
+
+    players_.clear();
+}
+
+void Server::set_max_peers(std::size_t max_peers)
+{
+    max_peers_ = max_peers;
+}
+
+void Server::accept_new(bool v)
+{
+    accept_new_ = v;
 }
 
 std::size_t Server::connected_peers() const
@@ -163,27 +148,67 @@ std::size_t Server::connected_peers() const
     return host_->connectedPeers;
 }
 
-void Server::on_connect(ENetPeer& peer, std::uint32_t userdata)
+std::size_t Server::max_peers() const
 {
+    return max_peers_;
 }
 
-void Server::on_disconnect(ENetPeer& peer, std::uint32_t userdata)
+std::uint16_t Server::port() const
 {
+    return host_->address.port;
 }
 
-void Server::on_net_message(const ENetPacket& packet)
+bool Server::accept_new() const
 {
+    return accept_new_;
 }
 
-void Server::destroy_client(ENetPeer& peer)
+Player& Server::player(ENetPeer& peer)
 {
-    delete player(peer);
-    player(peer) = nullptr;
+    return *players_.at(reinterpret_cast<std::uintptr_t>(peer.data));
 }
 
-Player*& Server::player(ENetPeer& peer)
+void Server::destroy_player(ENetPeer& peer)
 {
-    return *reinterpret_cast<Player**>(&peer.data);
+    players_.erase(reinterpret_cast<std::uintptr_t>(peer.data));
+    peer_ids_.return_id(reinterpret_cast<std::uintptr_t>(peer.data));
+    peer.data = nullptr;
+}
+
+void Server::on_connect(ENetPeer& peer)
+{
+    for(auto handler : connection_event_handlers_)
+    {
+        handler->on_connect(*this, player(peer));
+    }
+}
+
+void Server::on_disconnect(ENetPeer& peer, Net::C_DisconnectCode code)
+{
+    for(auto handler : connection_event_handlers_)
+    {
+        handler->on_disconnect(*this, player(peer), code);
+    }
+}
+
+void Server::on_net_message(const ENetPacket& packet, ENetPeer& sender)
+{
+    std::istringstream strm;
+
+    strm.str({reinterpret_cast<const char*>(packet.data), packet.dataLength});
+    try
+    {
+        std::unique_ptr<INetMessage> msg{INetMessage::parse_message(strm)};
+
+        for(auto handler : message_handlers_)
+        {
+            handler->handle_message(*msg, *this, player(sender));
+        }
+    }
+    catch(const std::exception& e)
+    {
+        logger()->warn("Failed to parse network message: {}", e.what());
+    }
 }
 
 } // namespace Net64

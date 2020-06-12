@@ -12,13 +12,14 @@
 
 namespace Net64
 {
-void ChatServer::on_message(const Net::C_ChatMessage& msg, ENetPeer& sender)
+void ChatServer::on_message(const Net::C_ChatMessage& msg, Server& server, Player& sender)
 {
-    if(!Server::player(sender)->handshaked())
+    if(!sender.handshaked())
         return;
 
     Net::S_ChatMessage snd_msg;
     snd_msg.message = msg.message;
-    snd_msg.sender = Server::player(sender)->player_id;
+    snd_msg.sender = sender.id.id();
+    sender.broadcast(snd_msg);
 }
 } // namespace Net64

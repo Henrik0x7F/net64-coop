@@ -41,6 +41,14 @@ const struct Net64ServerDisconnectCodeCategory : std::error_category
 
 namespace Net64::Net
 {
+std::string format_ip4(ENetAddress addr)
+{
+    std::string str(16, 0);
+    if(enet_address_get_host_ip(&addr, str.data(), str.size()) != 0)
+        return {};
+    return str;
+}
+
 std::error_code make_error_code(Net64::Net::S_DisconnectCode e)
 {
     return {static_cast<int>(e), g_s_disconnect_code_category};

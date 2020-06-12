@@ -7,14 +7,25 @@
 
 #pragma once
 
+#include "common/id_manager.hpp"
 #include "net64/logging.hpp"
 #include "net64/net/messages_client.hpp"
 
+
 namespace Net64
 {
-struct PlayerManager : INetMessageHandler::Derive<PlayerManager>::Receive<Net::C_Handshake>
+struct PlayerManager :
+    ServerMessageHandler::Derive<PlayerManager>::Receive<Net::C_Handshake>,
+    ServerConnectionEventHandler
 {
-    void on_message(const Net::C_Handshake& msg, ENetPeer& sender);
+    void on_connect(Server& server, Player& player) final;
+
+    void on_disconnect(Server& server, Player& player, Net::C_DisconnectCode code) final;
+
+    void on_message(const Net::C_Handshake& msg, Server& server, Player& sender);
+
+private:
+    IdManager<Net::player_id_t> player_ids_;
 
     CLASS_LOGGER_("server")
 };
