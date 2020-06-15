@@ -14,7 +14,7 @@
 
 namespace Net64
 {
-void LocalPlayerManager::on_connect(Client& client, LocalPlayer&)
+void LocalPlayerManager::on_connect(Client& client)
 {
     Net::C_Handshake snd_msg;
 
@@ -24,16 +24,16 @@ void LocalPlayerManager::on_connect(Client& client, LocalPlayer&)
     client.send(snd_msg);
 }
 
-void LocalPlayerManager::on_disconnect(Client&, LocalPlayer& player)
+void LocalPlayerManager::on_disconnect(Client& client)
 {
-    player = {};
+    client_data(client).local_player = {};
 }
 
-void LocalPlayerManager::on_message(const Net::S_Handshake& msg, Client&, LocalPlayer& player)
+void LocalPlayerManager::on_message(const Net::S_Handshake& msg, Client& client)
 {
-    player.id = msg.local_player_id;
+    client_data(client).local_player.id = msg.local_player_id;
 
-    logger()->info("Received handshake from server (player_id={})", player.id);
+    logger()->info("Received handshake from server (player_id={})", client_data(client).local_player.id);
 }
 
 }

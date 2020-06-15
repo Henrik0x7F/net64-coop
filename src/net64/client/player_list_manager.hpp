@@ -19,14 +19,9 @@ namespace Net64
 
 struct PlayerListManager : ClientMessageHandler::Derive<PlayerListManager>::Receive<Net::S_ClientConnected, Net::S_ClientDisconnected, Net::S_PlayerList>
 {
-    PlayerListManager(std::unordered_map<Net::player_id_t, RemotePlayer>& list);
-
-    void on_message(const Net::S_ClientConnected& msg, Client&, LocalPlayer&);
-    void on_message(const Net::S_ClientDisconnected& msg, Client&, LocalPlayer&);
-    void on_message(const Net::S_PlayerList& msg, Client&, LocalPlayer&);
-
-private:
-    std::unordered_map<Net::player_id_t, RemotePlayer>* player_list_{};
+    void on_message(const Net::S_ClientConnected& msg, Client& client);
+    void on_message(const Net::S_ClientDisconnected& msg, Client& client);
+    void on_message(const Net::S_PlayerList& msg, Client& client);
 };
 
 }

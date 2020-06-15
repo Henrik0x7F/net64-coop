@@ -55,15 +55,16 @@ Client::~Client()
 
 void Client::set_chat_callback(ChatCallback fn)
 {
-    chat_callback_ = std::move(fn);
+    
 }
 
-void Client::connect(const char* ip, std::uint16_t port, std::chrono::seconds timeout, ConnectCallback callback)
+void Client::connect(const char* ip, std::uint16_t port, std::string username, std::chrono::seconds timeout, ConnectCallback callback)
 {
     assert(!peer_);
 
     connect_callback_ = std::move(callback);
     connect_timeout_ = timeout;
+    username_ = std::move(username);
 
     ENetAddress addr;
     // @todo: check if ip is a domain or ip address
@@ -178,15 +179,17 @@ void Client::on_connect()
 {
     for(auto iter : connection_event_handlers_)
     {
-        iter->on_connect(*this, player_);
+        iter->on_connect(*this);
     }
 }
 
 void Client::on_disconnect()
 {
+    username_.clear();
+
     for(auto iter : connection_event_handlers_)
     {
-        iter->on_disconnect(*this, player_);
+        iter->on_disconnect(*this);
     }
 }
 
@@ -201,7 +204,7 @@ void Client::on_net_message(const ENetPacket& packet)
 
         for(auto handler : net_message_handlers_)
         {
-            handler->handle_message(*msg, *this, player_);
+            handler->handle_message(*msg, *this);
         }
     }
     catch(const std::exception& e)
@@ -233,6 +236,21 @@ void Client::send(const INetMessage& msg)
     PacketHandle packet(enet_packet_create(strm.str().data(), strm.str().size(), Net::channel_flags(msg.channel())));
 
     enet_peer_send(peer_.get(), static_cast<std::uint8_t>(msg.channel()), packet.release());
+}
+
+ClientSharedData Client::get_client_shared_data(Badge<ClientDataAccess>)
+{
+    return ClientSharedData{mem_hdl_, snd_queue_, player_, remote_players_};
+}
+
+std::string Client::username() const
+{
+    return username_;
+}
+
+const std::unordered_map<Net::player_id_t, RemotePlayer>& Client::remote_players() const
+{
+    return remote_players_;
 }
 
 } // namespace Net64

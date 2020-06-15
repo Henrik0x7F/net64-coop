@@ -12,6 +12,7 @@
 
 #include <enet/enet.h>
 
+#include "common/badge.hpp"
 #include "common/resource_handle.hpp"
 #include "net/net_message.hpp"
 #include "net64/client/msg_queue.hpp"
@@ -24,6 +25,7 @@
 #include "types.hpp"
 #include "net64/client/remote_player.hpp"
 #include "net64/client/local_player.hpp"
+#include "net64/client/chat_client.hpp"
 
 
 namespace Net64
@@ -48,6 +50,15 @@ struct is_error_code_enum<Net64::ClientError> : std::true_type
 
 namespace Net64
 {
+
+struct ClientSharedData
+{
+    Memory::MemHandle mem_hdl;
+    Game::MsgQueue::Sender& send_queue;
+    LocalPlayer& local_player;
+    std::unordered_map<Net::player_id_t, RemotePlayer>& remote_players;
+};
+
 struct Client
 {
     using Clock = std::chrono::steady_clock;
@@ -59,7 +70,7 @@ struct Client
 
     using ConnectCallback = std::function<void(std::error_code)>;
     using DisconnectCallback = std::function<void(std::error_code)>;
-    using ChatCallback = std::function<void(const std::string& sender, const std::string& msg)>;
+    using ChatCallback = ChatClient::ChatCallback;
 
     explicit Client(Memory::MemHandle mem_hdl);
 
@@ -70,7 +81,7 @@ struct Client
 
     void set_chat_callback(ChatCallback fn);
 
-    void connect(const char* ip, std::uint16_t port, std::chrono::seconds timeout, ConnectCallback callback);
+    void connect(const char* ip, std::uint16_t port, std::string username, std::chrono::seconds timeout, ConnectCallback callback);
     void disconnect(std::chrono::seconds timeout, DisconnectCallback callback);
 
     void abort_connect();
@@ -79,7 +90,7 @@ struct Client
 
     void tick();
 
-    void username(std::string name);
+    ClientSharedData get_client_shared_data(Badge<ClientDataAccess>);
 
     [[nodiscard]] bool connecting() const;
     [[nodiscard]] bool connected() const;
@@ -132,10 +143,11 @@ private:
     // Callbacks
     ConnectCallback connect_callback_;
     DisconnectCallback disconnect_callback_;
-    ChatCallback chat_callback_;
 
     LocalPlayer player_;
     std::unordered_map<Net::player_id_t, RemotePlayer> remote_players_;
+
+    std::string username_;
 
     // Components
     struct ComponentPtr

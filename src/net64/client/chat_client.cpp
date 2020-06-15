@@ -13,7 +13,7 @@
 
 namespace Net64
 {
-void ChatClient::on_message(const Net::S_ChatMessage& msg, Client& client, Player&)
+void ChatClient::on_message(const Net::S_ChatMessage& msg, Client& client)
 {
     if(!callback_)
         return;

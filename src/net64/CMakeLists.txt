@@ -62,7 +62,7 @@ add_library(net64_core STATIC
         server/chat_server.cpp
         server/player_manager.hpp
         server/player_manager.cpp
-        ../common/id_manager.hpp client/local_player.cpp client/local_player.hpp client/local_player_manager.cpp client/local_player_manager.hpp client/chat_client.cpp client/chat_client.hpp client/remote_player.cpp client/remote_player.hpp client/player_list_manager.cpp client/player_list_manager.hpp)
+        ../common/id_manager.hpp client/local_player.cpp client/local_player.hpp client/local_player_manager.cpp client/local_player_manager.hpp client/chat_client.cpp client/chat_client.hpp client/remote_player.cpp client/remote_player.hpp client/player_list_manager.cpp client/player_list_manager.hpp net/net_message.cpp)
 
 target_compile_options(net64_core PRIVATE ${ADDITIONAL_CXXFLAGS})
 

@@ -13,6 +13,7 @@
 
 #include <enet/enet.h>
 
+#include "common/badge.hpp"
 #include "common/id_manager.hpp"
 #include "common/resource_handle.hpp"
 #include "net64/logging.hpp"
@@ -23,6 +24,11 @@
 namespace Net64
 {
 struct Player;
+
+struct ServerSharedData
+{
+    std::unordered_map<std::uintptr_t, std::unique_ptr<Player>>& players;
+};
 
 struct Server
 {
@@ -58,6 +64,8 @@ struct Server
     [[nodiscard]] std::uint16_t port() const;
     [[nodiscard]] bool accept_new() const;
 
+
+    ServerSharedData get_server_shared_data(Badge<ServerDataAccess>);
     Player& player(ENetPeer& peer);
 
     static constexpr std::size_t ALLOCATED_PEERS{32};

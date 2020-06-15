@@ -11,15 +11,16 @@
 #include "common/message_interface.hpp"
 
 
-template<typename, typename...>
-struct IMessageHandler;
-
 namespace Impl
 {
-template<typename Derived, typename MessageType, typename... UsrArgs>
-struct Derive : IMessageHandler<MessageType, UsrArgs...>
+
+template<typename, typename, typename...>
+struct IMessageHandler;
+
+template<typename InheritFrom, typename Derived, typename MessageType, typename... UsrArgs>
+struct Derive : IMessageHandler<InheritFrom, MessageType, UsrArgs...>
 {
-    using MessageIdPredicate = typename IMessageHandler<MessageType, UsrArgs...>::MessageIdPredicate;
+    using MessageIdPredicate = typename IMessageHandler<InheritFrom, MessageType, UsrArgs...>::MessageIdPredicate;
 
     void handle_message(const MessageType& msg, UsrArgs... args) final
     {
@@ -27,13 +28,13 @@ struct Derive : IMessageHandler<MessageType, UsrArgs...>
     }
 };
 
-template<typename Derived, typename MessageType, typename... UsrArgs>
+template<typename InheritFrom, typename Derived, typename MessageType, typename... UsrArgs>
 struct DeriveFilter
 {
-    using MessageIdPredicate = typename IMessageHandler<MessageType, UsrArgs...>::MessageIdPredicate;
+    using MessageIdPredicate = typename IMessageHandler<InheritFrom, MessageType, UsrArgs...>::MessageIdPredicate;
 
     template<typename... Messages>
-    struct Filter : IMessageHandler<MessageType, UsrArgs...>
+    struct Filter : IMessageHandler<InheritFrom, MessageType, UsrArgs...>
     {
         struct Handler
         {
@@ -55,15 +56,13 @@ struct DeriveFilter
     };
 };
 
-} // namespace Impl
-
 /**
  * Interface for all message handlers
  * @tparam Identifier Type to identify message types
  * @tparam UsrArgs additional arguments passed
  */
-template<typename MessageType, typename... UsrArgs>
-struct IMessageHandler
+template<typename InheritFrom, typename MessageType, typename... UsrArgs>
+struct IMessageHandler : InheritFrom
 {
     using Identifier = typename MessageType::id_t;
 
@@ -85,9 +84,20 @@ struct IMessageHandler
     template<typename Derived>
     struct Derive final
     {
-        using ReceiveAll = Impl::Derive<Derived, MessageType, UsrArgs...>;
+        using ReceiveAll = Impl::Derive<InheritFrom, Derived, MessageType, UsrArgs...>;
 
         template<typename... Messages>
-        using Receive = typename Impl::DeriveFilter<Derived, MessageType, UsrArgs...>::template Filter<Messages...>;
+        using Receive = typename Impl::DeriveFilter<InheritFrom, Derived, MessageType, UsrArgs...>::template Filter<Messages...>;
     };
+};
+
+struct Empty{};
+
+} // Impl
+
+template<typename MessageType, typename... UsrArgs>
+struct IMessageHandler : Impl::IMessageHandler<Impl::Empty, MessageType, UsrArgs...>
+{
+    template<typename InheritFrom>
+    using Base = Impl::IMessageHandler<InheritFrom, MessageType, UsrArgs...>;
 };

@@ -211,4 +211,9 @@ void Server::on_net_message(const ENetPacket& packet, ENetPeer& sender)
     }
 }
 
+ServerSharedData Server::get_server_shared_data(Badge<ServerDataAccess>)
+{
+    return ServerSharedData{players_};
+}
+
 } // namespace Net64

@@ -29,6 +29,8 @@ struct Server;
 struct Client;
 struct Player;
 struct LocalPlayer;
+struct ClientSharedData;
+struct ServerSharedData;
 
 struct INetMessage : IMessage<INetMessage, NetMessageId>
 {
@@ -49,8 +51,21 @@ private:
     NetMessage(): INetMessage::Derive<Derived, ID>(CHANNEL) {}
 };
 
-using ClientMessageHandler = IMessageHandler<INetMessage, Client&, LocalPlayer&>;
-using ServerMessageHandler = IMessageHandler<INetMessage, Server&, Player&>;
+struct ServerDataAccess
+{
+protected:
+    static ServerSharedData server_data(Server& server);
+};
+
+using ServerMessageHandler = IMessageHandler<INetMessage, Server&, Player&>::Base<ServerDataAccess>;
+
+struct ClientDataAccess
+{
+protected:
+    static ClientSharedData client_data(Client& client);
+};
+
+using ClientMessageHandler = IMessageHandler<INetMessage, Client&>::Base<ClientDataAccess>;
 
 struct ServerConnectionEventHandler
 {
@@ -60,12 +75,12 @@ struct ServerConnectionEventHandler
     virtual void on_disconnect(Server&, Player&, Net::C_DisconnectCode) {}
 };
 
-struct ClientConnectionEventHandler
+struct ClientConnectionEventHandler : ClientDataAccess
 {
     virtual ~ClientConnectionEventHandler() = default;
 
-    virtual void on_connect(Client&, LocalPlayer&) {}
-    virtual void on_disconnect(Client&, LocalPlayer&) {}
+    virtual void on_connect(Client&) {}
+    virtual void on_disconnect(Client&) {}
 };
 
 struct ServerTickHandler
@@ -75,11 +90,11 @@ struct ServerTickHandler
     virtual void on_tick(Server& server) = 0;
 };
 
-struct ClientTickHandler
+struct ClientTickHandler : ClientDataAccess
 {
     virtual ~ClientTickHandler() = default;
 
-    virtual void on_tick(Client& client, LocalPlayer& player) = 0;
+    virtual void on_tick(Client& client) = 0;
 };
 
 } // namespace Net64

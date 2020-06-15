@@ -14,10 +14,10 @@ namespace Net64
 {
 struct LocalPlayerManager : ClientMessageHandler::Derive<LocalPlayerManager>::Receive<Net::S_Handshake>, ClientConnectionEventHandler
 {
-    void on_connect(Client& client, LocalPlayer& player) final;
-    void on_disconnect(Client& client, LocalPlayer& player) final;
+    void on_connect(Client& client) final;
+    void on_disconnect(Client& client) final;
 
-    void on_message(const Net::S_Handshake& msg, Client& client, LocalPlayer& player);
+    void on_message(const Net::S_Handshake& msg, Client& client);
 
     CLASS_LOGGER_("client")
 };

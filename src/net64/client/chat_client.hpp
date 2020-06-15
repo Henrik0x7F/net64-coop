@@ -21,7 +21,7 @@ struct ChatClient : ClientMessageHandler::Derive<ChatClient>::Receive<Net::S_Cha
 
     void send(Client& client, std::string message);
 
-    void on_message(const Net::S_ChatMessage& msg, Client& client, Player& player);
+    void on_message(const Net::S_ChatMessage& msg, Client& client);
 
 private:
     ChatCallback callback_;
