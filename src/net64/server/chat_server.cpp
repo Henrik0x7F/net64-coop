@@ -12,7 +12,7 @@
 
 namespace Net64
 {
-void ChatServer::on_message(const Net::C_ChatMessage& msg, Server& server, Player& sender)
+void ChatServer::on_message(const Net::C_ChatMessage& msg, Server&, Player& sender)
 {
     if(!sender.handshaked())
         return;

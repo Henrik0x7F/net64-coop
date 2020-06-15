@@ -7,13 +7,16 @@
 
 #include "message_handler.hpp"
 
+#include "net64/client/local_player.hpp"
+#include "net64/client.hpp"
+
 
 namespace Net64::Game
 {
-void MessageHandler::push_message(const n64_message_t& message)
+void MessageHandler::push_message(Client& client, const n64_message_t& message)
 {
     if(subscribed_messages_[message.msg_type])
-        handle_message(message);
+        handle_message(client, message);
 }
 
 MessageHandler::MessageHandler(std::initializer_list<message_type_t> subscribed_messages)

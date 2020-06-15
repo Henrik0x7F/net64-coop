@@ -54,7 +54,7 @@ struct IMessage : Factory<BaseMessage, Identifier, BaseMessage*>
             return nullptr;
         }
 
-        message.release();
+        return message.release();
     }
 
     /// Return message id

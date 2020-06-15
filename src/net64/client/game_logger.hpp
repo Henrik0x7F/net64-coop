@@ -9,21 +9,26 @@
 
 #include <string>
 
-#include "net64/game/message_handler.hpp"
+#include "net64/client/message_handler.hpp"
 #include "net64/logging.hpp"
 
+
+namespace Net64
+{
+struct Client;
+}
 
 namespace Net64::Game
 {
 /**
  * Allows SM64 to send log messages into the client's console
  */
-struct GameLogger : MessageHandler
+struct Logger : MessageHandler
 {
-    GameLogger();
+    Logger();
 
 private:
-    void handle_message(const n64_message_t& message) override;
+    void handle_message(Client&, const n64_message_t& message) final;
 
     std::string text_buf_;
 

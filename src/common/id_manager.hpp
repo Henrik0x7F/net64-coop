@@ -34,8 +34,8 @@ struct IdManager
     {
         if(id == new_id_)
             --new_id_;
-
-        free_ids_.push_back(id);
+        else
+            free_ids_.push_back(id);
     }
 
 private:

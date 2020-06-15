@@ -12,20 +12,20 @@ add_library(net64_core STATIC
         error_codes.hpp
         error_codes.cpp
         ../common/crtp.hpp
-        game/msg_queue.cpp
-        game/msg_queue.hpp
+        client/msg_queue.cpp
+        client/msg_queue.hpp
         emulator/emulator.hpp
         emulator/m64plus.cpp
         emulator/m64plus.hpp
         emulator/m64plus_core.cpp
         emulator/m64plus_plugin.cpp
-        game/client_messages.hpp
-        game/game_messages.hpp
-        game/message_handler.cpp
-        game/message_handler.hpp
-        game/game_logger.cpp
-        game/game_logger.hpp
-        game/net64_header.hpp
+        client/client_messages.hpp
+        client/game_messages.hpp
+        client/message_handler.cpp
+        client/message_handler.hpp
+        client/game_logger.cpp
+        client/game_logger.hpp
+        client/net64_header.hpp
         memory/pointer.hpp
         client.cpp
         client.hpp
@@ -62,7 +62,7 @@ add_library(net64_core STATIC
         server/chat_server.cpp
         server/player_manager.hpp
         server/player_manager.cpp
-        ../common/id_manager.hpp)
+        ../common/id_manager.hpp client/local_player.cpp client/local_player.hpp client/local_player_manager.cpp client/local_player_manager.hpp client/chat_client.cpp client/chat_client.hpp client/remote_player.cpp client/remote_player.hpp client/player_list_manager.cpp client/player_list_manager.hpp)
 
 target_compile_options(net64_core PRIVATE ${ADDITIONAL_CXXFLAGS})
 

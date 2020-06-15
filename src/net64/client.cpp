@@ -5,9 +5,12 @@
 // Refer to the LICENSE file included
 //
 
-#include <net64/net/errors.hpp>
+#include "net64/net/errors.hpp"
 
 #include "client.hpp"
+
+#include "net64/client/game_logger.hpp"
+
 
 namespace Net64
 {
@@ -32,91 +35,111 @@ Client::Client(Memory::MemHandle mem_hdl):
     logger()->info("Initialized Net64 client version {} (Compatibility: {})",
                    net64_header_->field(&Game::net64_header_t::version).read(),
                    net64_header_->field(&Game::net64_header_t::compat_version).read());
+
+    // Components
+    add_component(new Game::Logger);
 }
 
-void Client::set_chat_callback(std::function<void(const std::string&, const std::string&)> fn)
+Client::~Client()
 {
+    net_message_handlers_.clear();
+    connection_event_handlers_.clear();
+    tick_handlers_.clear();
+    game_message_handlers_.clear();
+
+    for(auto& iter : components_)
+    {
+        iter.deleter(iter.component);
+    }
 }
 
-std::error_code Client::connect(const char* ip, std::uint16_t port)
+void Client::set_chat_callback(ChatCallback fn)
 {
-    if(peer_)
-        return make_error_code(Net::Error::ALREADY_CONNECTED);
+    chat_callback_ = std::move(fn);
+}
 
-    disconnect_code_ = 0;
+void Client::connect(const char* ip, std::uint16_t port, std::chrono::seconds timeout, ConnectCallback callback)
+{
+    assert(!peer_);
+
+    connect_callback_ = std::move(callback);
+    connect_timeout_ = timeout;
 
     ENetAddress addr;
     // @todo: check if ip is a domain or ip address
     if(enet_address_set_host(&addr, ip) != 0)
     {
-        return make_error_code(Net::Error::UNKOWN_HOSTNAME);
+        connect_callback_(make_error_code(Net::Error::UNKOWN_HOSTNAME));
+        return;
     }
     addr.port = port;
 
-    PeerHandle peer{enet_host_connect(host_.get(), &addr, Net::channel_count(), Net::PROTO_VER)};
+    PeerHandle peer(enet_host_connect(host_.get(), &addr, Net::channel_count(), Net::PROTO_VER));
     if(!peer)
     {
-        return make_error_code(Net::Error::ENET_PEER_CREATION);
+        connect_callback_(make_error_code(Net::Error::ENET_PEER_CREATION));
+        return;
     }
 
-    ENetEvent evt;
-    if(enet_host_service(host_.get(), &evt, Net::CONNECT_TIMEOUT) > 0 && evt.type == ENET_EVENT_TYPE_CONNECT)
-    {
-        peer_ = std::move(peer);
-        on_connect();
-
-        return {};
-    }
-
-    return make_error_code(Net::Error::TIMED_OUT);
+    connection_start_time_ = Clock::now();
+    peer_ = std::move(peer);
 }
 
-void Client::disconnect()
+void Client::disconnect(std::chrono::seconds timeout, ConnectCallback callback)
 {
-    if(!peer_)
+    if(!connected())
         return;
 
-    enet_peer_disconnect(peer_.get(), 0);
+    disconnect_callback_ = std::move(callback);
+    disconnect_timeout_ = timeout;
 
-    ENetEvent evt;
-    while(enet_host_service(host_.get(), &evt, Net::DISCONNECT_TIMEOUT) > 0)
-    {
-        switch(evt.type)
-        {
-        case ENET_EVENT_TYPE_RECEIVE:
-            enet_packet_destroy(evt.packet);
-            break;
-        case ENET_EVENT_TYPE_DISCONNECT:
-            // ENet already took care of deallocation
-            (void)peer_.release();
-            return;
-        }
-    }
+    enet_peer_disconnect(peer_.get(), static_cast<std::uint32_t>(Net::C_DisconnectCode::USER_DISCONNECT));
+    disconnection_start_time_ = Clock::now();
+}
 
-    // Force disconnect
+void Client::abort_connect()
+{
+    if(!connecting())
+        return;
+
     peer_.reset();
-
-    on_disconnect();
+    connect_callback_(make_error_code(Net::Error::TIMED_OUT));
 }
 
 void Client::tick()
 {
-    if(peer_)
+    if(Clock::now() - connection_start_time_ > connect_timeout_)
     {
-        for(ENetEvent evt; enet_host_service(host_.get(), &evt, Net::CLIENT_SERVICE_WAIT) > 0;)
+        // Connection timed out
+        abort_connect();
+    }
+    if(disconnecting() && (Clock::now() - disconnection_start_time_) > disconnect_timeout_)
+    {
+        // Disconnecting timed out
+        on_disconnect();
+        peer_.reset();
+        disconnect_callback_({});
+    }
+
+    for(ENetEvent evt; enet_host_service(host_.get(), &evt, Net::CLIENT_SERVICE_WAIT) > 0;)
+    {
+        switch(evt.type)
         {
-            switch(evt.type)
-            {
-            case ENET_EVENT_TYPE_RECEIVE:
-                on_net_message(*evt.packet);
-                enet_packet_destroy(evt.packet);
-                break;
-            case ENET_EVENT_TYPE_DISCONNECT:
-                // ENet already took care of deallocation
-                (void)peer_.release();
-                disconnect_code_ = evt.data;
-                break;
-            }
+        case ENET_EVENT_TYPE_CONNECT:
+            connect_callback_({});
+            on_connect();
+            break;
+        case ENET_EVENT_TYPE_DISCONNECT:
+            disconnect_callback_({});
+            on_disconnect();
+            // ENet already took care of deallocation
+            (void)peer_.release();
+            break;
+        case ENET_EVENT_TYPE_RECEIVE: {
+            PacketHandle packet(evt.packet);
+            on_net_message(*packet);
+            break;
+        }
         }
     }
 
@@ -126,14 +149,24 @@ void Client::tick()
     }
 }
 
-bool Client::connected() const
+bool Client::connecting() const
 {
-    return (peer_ != nullptr);
+    return (peer_ != nullptr && !connected());
 }
 
-std::uint32_t Client::disconnect_code() const
+bool Client::connected() const
 {
-    return disconnect_code_;
+    return (peer_ != nullptr && peer_->state == ENET_PEER_STATE_CONNECTED);
+}
+
+bool Client::disconnecting() const
+{
+    return (peer_ != nullptr && peer_->state == ENET_PEER_STATE_DISCONNECTING);
+}
+
+bool Client::disconnected() const
+{
+    return !peer_;
 }
 
 bool Client::game_initialized(Memory::MemHandle mem_hdl)
@@ -143,10 +176,18 @@ bool Client::game_initialized(Memory::MemHandle mem_hdl)
 
 void Client::on_connect()
 {
+    for(auto iter : connection_event_handlers_)
+    {
+        iter->on_connect(*this, player_);
+    }
 }
 
 void Client::on_disconnect()
 {
+    for(auto iter : connection_event_handlers_)
+    {
+        iter->on_disconnect(*this, player_);
+    }
 }
 
 void Client::on_net_message(const ENetPacket& packet)
@@ -154,16 +195,27 @@ void Client::on_net_message(const ENetPacket& packet)
     std::istringstream strm;
 
     strm.str({reinterpret_cast<const char*>(packet.data), packet.dataLength});
+    try
+    {
+        std::unique_ptr<INetMessage> msg{INetMessage::parse_message(strm)};
 
-    std::unique_ptr<INetMessage> msg{INetMessage::parse_message(strm)};
-
-    if(!msg)
-        return;
+        for(auto handler : net_message_handlers_)
+        {
+            handler->handle_message(*msg, *this, player_);
+        }
+    }
+    catch(const std::exception& e)
+    {
+        logger()->warn("Failed to parse network message: {}", e.what());
+    }
 }
 
 void Client::on_game_message(const Game::MsgQueue::n64_message_t& message)
 {
-    game_logger_.push_message(message);
+    for(auto iter : game_message_handlers_)
+    {
+        iter->push_message(*this, message);
+    }
 }
 
 void Client::send(const INetMessage& msg)

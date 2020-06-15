@@ -14,12 +14,12 @@ using Clock = std::chrono::steady_clock;
 
 namespace Net64
 {
-void PlayerManager::on_connect(Server& server, Player& player)
+void PlayerManager::on_connect(Server&, Player& player)
 {
     player.connect_time = Clock::now();
 }
 
-void PlayerManager::on_disconnect(Server& server, Player& player, Net::C_DisconnectCode code)
+void PlayerManager::on_disconnect(Server&, Player& player, Net::C_DisconnectCode code)
 {
     if(!player.handshaked())
         return;
@@ -31,7 +31,7 @@ void PlayerManager::on_disconnect(Server& server, Player& player, Net::C_Disconn
     player.broadcast(snd_msg);
 }
 
-void PlayerManager::on_message(const Net::C_Handshake& msg, Server& server, Player& sender)
+void PlayerManager::on_message(const Net::C_Handshake& msg, Server&, Player& sender)
 {
     // Check if player already got a player id
     if(sender.id.has_id())

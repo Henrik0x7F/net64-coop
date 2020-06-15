@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "net64/game/msg_queue.hpp"
+#include "net64/client/msg_queue.hpp"
 #include "types.hpp"
 
 

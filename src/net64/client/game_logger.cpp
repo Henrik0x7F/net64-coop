@@ -22,21 +22,19 @@ static std::size_t strnlen(const char* str, std::size_t max_len)
 }
 
 
-GameLogger::GameLogger(): MessageHandler{GameMessage::LOG_APPEND, GameMessage::LOG_END}
-
-
+Logger::Logger(): MessageHandler{Message::LOG_APPEND, Message::LOG_END}
 {
 }
 
-void GameLogger::handle_message(const n64_message_t& message)
+void Logger::handle_message(Client&, const n64_message_t& message)
 {
     switch(message.msg_type)
     {
-    case GameMessage::LOG_APPEND:
+    case Message::LOG_APPEND:
         text_buf_ += std::string(reinterpret_cast<const char*>(message.msg_data),
                                  strnlen(reinterpret_cast<const char*>(message.msg_data), MSG_DATA_LEN));
         break;
-    case GameMessage::LOG_END:
+    case Message::LOG_END:
         text_buf_ += std::string(reinterpret_cast<const char*>(message.msg_data),
                                  strnlen(reinterpret_cast<const char*>(message.msg_data), MSG_DATA_LEN));
         logger()->info(text_buf_);

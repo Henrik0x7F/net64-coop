@@ -28,6 +28,7 @@ namespace Net64
 struct Server;
 struct Client;
 struct Player;
+struct LocalPlayer;
 
 struct INetMessage : IMessage<INetMessage, NetMessageId>
 {
@@ -48,7 +49,7 @@ private:
     NetMessage(): INetMessage::Derive<Derived, ID>(CHANNEL) {}
 };
 
-using ClientMessageHandler = IMessageHandler<INetMessage, Client&>;
+using ClientMessageHandler = IMessageHandler<INetMessage, Client&, LocalPlayer&>;
 using ServerMessageHandler = IMessageHandler<INetMessage, Server&, Player&>;
 
 struct ServerConnectionEventHandler
@@ -59,11 +60,26 @@ struct ServerConnectionEventHandler
     virtual void on_disconnect(Server&, Player&, Net::C_DisconnectCode) {}
 };
 
+struct ClientConnectionEventHandler
+{
+    virtual ~ClientConnectionEventHandler() = default;
+
+    virtual void on_connect(Client&, LocalPlayer&) {}
+    virtual void on_disconnect(Client&, LocalPlayer&) {}
+};
+
 struct ServerTickHandler
 {
     virtual ~ServerTickHandler() = default;
 
     virtual void on_tick(Server& server) = 0;
+};
+
+struct ClientTickHandler
+{
+    virtual ~ClientTickHandler() = default;
+
+    virtual void on_tick(Client& client, LocalPlayer& player) = 0;
 };
 
 } // namespace Net64

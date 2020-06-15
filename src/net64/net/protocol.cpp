@@ -62,6 +62,7 @@ std::uint8_t channel_count()
 {
     return static_cast<std::uint8_t>(Channel::COUNT);
 }
+
 std::uint32_t channel_flags(Channel channel)
 {
     return CHANNEL_FLAGS[static_cast<std::size_t>(channel)];
