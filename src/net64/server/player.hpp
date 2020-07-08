@@ -7,14 +7,26 @@
 
 #pragma once
 
+#include <chrono>
+#include <enet/enet.h>
+#include "net64/net/net_message.hpp"
 #include "common/id_manager.hpp"
-#include "net64/server.hpp"
 
 
 namespace Net64
 {
+
+struct Server;
+
 struct Player
 {
+    enum struct ConnectionState
+    {
+        INITIAL,
+        HANDSHAKED,
+        IN_GAME
+    };
+
     Player(Server& server, ENetPeer& peer);
 
     bool handshaked() const;
@@ -25,9 +37,10 @@ struct Player
     ENetPeer& peer();
 
 
-    Server::Clock::time_point connect_time{};
+    std::chrono::steady_clock::time_point connect_time{};
     IdHandle<Net::player_id_t> id{};
     std::string name{};
+    ConnectionState connection_state{ConnectionState::INITIAL};
 
 private:
     Server* server_{};

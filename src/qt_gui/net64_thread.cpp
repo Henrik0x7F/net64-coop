@@ -43,12 +43,32 @@ void Net64Obj::initialize_net64(Net64::Emulator::IEmulator* emu)
     initializing_net64_ = true;
 }
 
-void Net64Obj::connect(std::string ip, std::uint16_t port)
+void Net64Obj::connect(std::string username, std::string ip, std::uint16_t port)
 {
+    assert(client_.has_value() && client_->disconnected());
+
+    client_->connect(ip.c_str(), port, username.c_str(), std::chrono::seconds(5), [this](auto ec)
+    {
+                         connected(ec);
+    });
 }
 
 void Net64Obj::disconnect()
 {
+    assert(client_.has_value());
+
+    if(client_->connecting())
+    {
+        client_->abort_connect();
+    }
+    else if(client_->disconnected())
+    {
+        disconnected();
+    }
+    else if(client_->connected())
+    {
+        client_->disconnect(std::chrono::seconds(5), [this](auto) { disconnected(); });
+    }
 }
 
 void Net64Obj::destroy_net64()
@@ -73,6 +93,10 @@ void Net64Obj::tick()
             try
             {
                 client_ = Net64::Client(*memory_hdl_);
+                client_->set_chat_callback([this](auto sender, auto msg)
+                                           {
+                                               chat_message(std::move(sender), std::move(msg));
+                                           });
             }
             catch(const std::system_error& e)
             {
@@ -90,6 +114,38 @@ void Net64Obj::tick()
     }
     if(client_.has_value())
         client_->tick();
+    if(server_.has_value())
+        server_->tick();
+}
+
+void Net64Obj::start_server(std::uint16_t max_slots, std::uint16_t port)
+{
+    assert(!server_.has_value());
+
+    try
+    {
+        server_ = Net64::Server(port, max_slots);
+    }
+    catch(const std::system_error& e)
+    {
+        server_started(e.code());
+    }
+    catch(...)
+    {
+        server_started(make_error_code(Net64::ErrorCode::UNKNOWN));
+    }
+}
+
+void Net64Obj::stop_server()
+{
+    if(server_.has_value())
+    {
+        server_->disconnect_all(Net64::Net::S_DisconnectCode::SERVER_SHUTDOWN);
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        server_ = {};
+    }
+
+    server_stopped({});
 }
 
 
@@ -115,6 +171,7 @@ Net64Thread::Net64Thread(AppSettings& config)
     QObject::connect(obj, &Net64Obj::connected, this, &Net64Thread::o_connected);
     QObject::connect(obj, &Net64Obj::disconnected, this, &Net64Thread::o_disconnected);
     QObject::connect(obj, &Net64Obj::net64_destroyed, this, &Net64Thread::o_net64_destroyed);
+    QObject::connect(obj, &Net64Obj::chat_message, this, &Net64Thread::o_chat_message);
 
     thread_.start();
 }
@@ -153,9 +210,9 @@ void Net64Thread::initialize_net64(Net64::Emulator::IEmulator* emu)
     s_initialize_net64(emu);
 }
 
-void Net64Thread::connect(std::string ip, std::uint16_t port)
+void Net64Thread::connect(std::string username, std::string ip, std::uint16_t port)
 {
-    s_connect(std::move(ip), port);
+    s_connect(std::move(username), std::move(ip), port);
 }
 
 void Net64Thread::disconnect()
@@ -185,6 +242,11 @@ void Net64Thread::o_connected(std::error_code ec)
     connected(ec);
 }
 
+void Net64Thread::o_chat_message(std::string sender, std::string message)
+{
+    chat_message(std::move(sender), std::move(message));
+}
+
 void Net64Thread::o_disconnected()
 {
     is_connected_ = false;
@@ -198,6 +260,33 @@ void Net64Thread::o_net64_destroyed()
     is_initializing_ = false;
 
     net64_destroyed();
+}
+
+bool Net64Thread::is_server_running() const
+{
+    return is_server_running_;
+}
+
+void Net64Thread::start_server(std::uint16_t max_slots, std::uint16_t port)
+{
+    s_start_server(max_slots, port);
+}
+
+void Net64Thread::stop_server()
+{
+    s_stop_server();
+}
+
+void Net64Thread::o_server_started(std::error_code ec)
+{
+    is_server_running_ = !static_cast<bool>(ec);
+    server_started(ec);
+}
+
+void Net64Thread::o_server_stopped(std::error_code ec)
+{
+    is_server_running_ = false;
+    server_stopped(ec);
 }
 
 } // namespace Frontend

@@ -61,6 +61,13 @@ struct ClientSharedData
 
 struct Client
 {
+    enum struct ConnectionState
+    {
+        INITIAL,
+        HANDSHAKED,
+        IN_GAME
+    };
+
     using Clock = std::chrono::steady_clock;
     using TimePoint = Clock::time_point;
 
@@ -160,6 +167,8 @@ private:
     std::vector<Game::MessageHandler*> game_message_handlers_;
     std::vector<ClientConnectionEventHandler*> connection_event_handlers_;
     std::vector<ClientTickHandler*> tick_handlers_;
+
+    ChatClient* chat_client_{};
 
     CLASS_LOGGER_("client")
 };

@@ -10,6 +10,8 @@
 #include "client.hpp"
 
 #include "net64/client/game_logger.hpp"
+#include "net64/client/local_player_manager.hpp"
+#include "net64/client/player_list_manager.hpp"
 
 
 namespace Net64
@@ -37,7 +39,12 @@ Client::Client(Memory::MemHandle mem_hdl):
                    net64_header_->field(&Game::net64_header_t::compat_version).read());
 
     // Components
+    chat_client_ = new ChatClient;
+    add_component(chat_client_);
     add_component(new Game::Logger);
+    add_component(new LocalPlayerManager);
+    add_component(new PlayerListManager);
+    add_component(new ChatClient);
 }
 
 Client::~Client()
@@ -55,7 +62,7 @@ Client::~Client()
 
 void Client::set_chat_callback(ChatCallback fn)
 {
-    
+    chat_client_->set_chat_callback(fn);
 }
 
 void Client::connect(const char* ip, std::uint16_t port, std::string username, std::chrono::seconds timeout, ConnectCallback callback)
@@ -86,7 +93,7 @@ void Client::connect(const char* ip, std::uint16_t port, std::string username, s
     peer_ = std::move(peer);
 }
 
-void Client::disconnect(std::chrono::seconds timeout, ConnectCallback callback)
+void Client::disconnect(std::chrono::seconds timeout, DisconnectCallback callback)
 {
     if(!connected())
         return;

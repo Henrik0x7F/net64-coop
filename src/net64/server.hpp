@@ -19,6 +19,7 @@
 #include "net64/logging.hpp"
 #include "net64/net/net_message.hpp"
 #include "net64/net/protocol.hpp"
+#include "net64/server/player.hpp"
 
 
 namespace Net64
@@ -41,8 +42,8 @@ struct Server
     //
     Server(std::uint16_t port, std::size_t max_peers);
     ~Server();
-    Server(const Server&) = delete;
-    Server& operator=(const Server&) = delete;
+    Server(Server&& other) = default;
+    Server& operator=(Server&& other) = default;
 
     // Update
     void tick();

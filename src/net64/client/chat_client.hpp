@@ -25,6 +25,8 @@ struct ChatClient : ClientMessageHandler::Derive<ChatClient>::Receive<Net::S_Cha
 
 private:
     ChatCallback callback_;
+
+    CLASS_LOGGER_("client")
 };
 
 }

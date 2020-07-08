@@ -64,6 +64,8 @@ private slots:
     void on_emulator_unpaused();
     void on_emulator_joinable();
 
+    void on_chat_message(std::string sender, std::string message);
+
 
     void setup_menus();
     void setup_signals();

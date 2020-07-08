@@ -7,6 +7,8 @@
 
 #include "player.hpp"
 
+#include "net64/server.hpp"
+
 namespace Net64
 {
 Player::Player(Server& server, ENetPeer& peer): server_(&server), peer_(&peer)
@@ -20,16 +22,22 @@ bool Player::handshaked() const
 
 void Player::disconnect(Net::S_DisconnectCode reason)
 {
-    server_->disconnect(*peer_, reason);
+    Server::disconnect(*peer_, reason);
 }
 
 void Player::send(const INetMessage& msg)
 {
-    server_->send(*peer_, msg);
+    Server::send(*peer_, msg);
 }
 
 void Player::broadcast(const INetMessage& msg)
 {
     server_->broadcast(msg);
 }
+
+ENetPeer& Player::peer()
+{
+    return *peer_;
+}
+
 } // namespace Net64

@@ -18,8 +18,16 @@ void ChatClient::on_message(const Net::S_ChatMessage& msg, Client& client)
     if(!callback_)
         return;
 
-    callback_(client.remote_players().at(msg.sender).name, msg.message);
+    try
+    {
+        callback_(client.remote_players().at(msg.sender).name, msg.message);
+    }
+    catch(const std::out_of_range& e)
+    {
+        logger()->warn("Unknown sender ID in chat message");
+    }
 }
+
 void ChatClient::set_chat_callback(ChatClient::ChatCallback fn)
 {
     callback_ = std::move(fn);

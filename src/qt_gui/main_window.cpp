@@ -96,7 +96,26 @@ void MainWindow::on_emulator_settings()
 
 void MainWindow::on_start_server_btn_pressed()
 {
-    on_connect_btn_pressed();
+    logger()->info("Starting Net64 server");
+
+    ui->btn_connect_ip->setDisabled(true);
+    ui->btn_start_server->setDisabled(true);
+
+    connect(&net64_thread_, &Net64Thread::server_started, [this](auto ec)
+    {
+               if(ec)
+               {
+                   logger()->error("Failed to start server: {}", format_error_msg(ec).toStdString());
+                   error_popup("Failed to start server", format_error_msg(ec));
+                   ui->btn_connect_ip->setDisabled(false);
+                   ui->btn_start_server->setDisabled(false);
+               }
+               else
+               {
+                   logger()->info("Server started");
+                   connect_net64();
+               }
+            });
 }
 
 void MainWindow::on_connect_btn_pressed()
@@ -140,9 +159,7 @@ void MainWindow::on_emulator_state(Net64::Emulator::State state)
 
 void MainWindow::on_emulator_started()
 {
-    set_page(Page::IN_GAME);
-    ui->btn_connect_ip->setDisabled(false);
-    ui->btn_start_server->setDisabled(false);
+
 }
 
 void MainWindow::on_emulator_paused()
@@ -173,6 +190,11 @@ void MainWindow::on_emulator_joinable()
 
     if(reload_emulator_after_stop_)
         reload_emulator();
+}
+
+void MainWindow::on_chat_message(std::string sender, std::string message)
+{
+    ui->tbx_chat_history->appendPlainText(QString::fromStdString(sender + ": " + message + '\n'));
 }
 
 void MainWindow::setup_menus()
@@ -215,6 +237,8 @@ void MainWindow::setup_signals()
     connect(ui->btn_connect_ip, &QPushButton::clicked, this, &MainWindow::on_connect_btn_pressed);
     connect(ui->btn_start_server, &QPushButton::clicked, this, &MainWindow::on_start_server_btn_pressed);
     connect(ui->btn_stop, &QPushButton::clicked, this, &MainWindow::on_stop_server_btn_pressed);
+
+    connect(&net64_thread_, &Net64Thread::chat_message, this, &MainWindow::on_chat_message);
 }
 
 void MainWindow::set_page(Page page)
@@ -316,7 +340,27 @@ void MainWindow::connect_net64()
     }
 
     // Connect to server
-    // net64_thread_.connect();
+    if(!net64_thread_.is_connected())
+    {
+        connect_once(&net64_thread_, &Net64Thread::connected, [this](auto ec)
+        {
+                         if(ec)
+                         {
+                             error_popup("Failed to connect to server", format_error_msg(ec));
+                         }
+                         else
+                         {
+                             connect_net64();
+                         }
+                     });
+        if(net64_thread_.is_server_running())
+            net64_thread_.connect(settings_->username, "localhost", (std::uint16_t)ui->sbx_host_port->value());
+        else
+            net64_thread_.connect(settings_->username, ui->tbx_join_ip->text().toStdString(), (std::uint16_t)ui->sbx_join_port->value());
+        return;
+    }
+
+    // Connected
 }
 
 } // namespace Frontend
