@@ -16,27 +16,11 @@
 
 namespace Net64
 {
-Client::Client(Memory::MemHandle mem_hdl):
-    mem_hdl_{mem_hdl},
-    net64_header_{mem_hdl_, mem_hdl_.read<n64_addr_t>(Game::FixedAddr::HEADER_PTR)},
-    rcv_queue_{net64_header_->field(&Game::net64_header_t::receive_queue)},
-    snd_queue_{net64_header_->field(&Game::net64_header_t::send_queue)},
+Client::Client():
     host_{enet_host_create(nullptr, 1, Net::channel_count(), 0, 0)}
 {
     if(!host_)
         throw std::system_error(make_error_code(Net::Error::ENET_HOST_CREATION));
-
-    if(net64_header_->field(&Game::net64_header_t::compat_version) != Game::CLIENT_COMPAT_VER)
-    {
-        logger()->error("Incompatible patch version. Patch version: {}, Client version: {}",
-                        net64_header_->field(&Game::net64_header_t::compat_version).read(),
-                        Game::CLIENT_COMPAT_VER);
-        throw std::system_error(make_error_code(Net64::ClientError::INCOMPATIBLE_GAME));
-    }
-
-    logger()->info("Initialized Net64 client version {} (Compatibility: {})",
-                   net64_header_->field(&Game::net64_header_t::version).read(),
-                   net64_header_->field(&Game::net64_header_t::compat_version).read());
 
     // Components
     chat_client_ = new ChatClient;
@@ -65,11 +49,22 @@ void Client::set_chat_callback(ChatCallback fn)
     chat_client_->set_chat_callback(fn);
 }
 
-void Client::connect(const char* ip, std::uint16_t port, std::string username, std::chrono::seconds timeout, ConnectCallback callback)
+void Client::hook(Memory::MemHandle mem_hdl, HookedCallback fn)
+{
+    mem_hdl_ = std::move(mem_hdl);
+    hooked_callback_ = std::move(fn);
+
+    hooking_ = true;
+}
+
+void Client::connect(const char* ip, std::uint16_t port, std::string username, std::chrono::seconds timeout, ConnectCallback connect_callback, DisconnectCallback disconnect_callback)
 {
     assert(!peer_);
 
-    connect_callback_ = std::move(callback);
+    logger()->info("Connecting to {}:{} as {}", ip, port, username);
+
+    connect_callback_ = std::move(connect_callback);
+    disconnect_callback_ = std::move(disconnect_callback);
     connect_timeout_ = timeout;
     username_ = std::move(username);
 
@@ -77,6 +72,7 @@ void Client::connect(const char* ip, std::uint16_t port, std::string username, s
     // @todo: check if ip is a domain or ip address
     if(enet_address_set_host(&addr, ip) != 0)
     {
+        logger()->error("Failed to establish connection: Hostname resolution failed");
         connect_callback_(make_error_code(Net::Error::UNKOWN_HOSTNAME));
         return;
     }
@@ -85,6 +81,7 @@ void Client::connect(const char* ip, std::uint16_t port, std::string username, s
     PeerHandle peer(enet_host_connect(host_.get(), &addr, Net::channel_count(), Net::PROTO_VER));
     if(!peer)
     {
+        logger()->error("Failed to establish connection: Failed to create ENet peer");
         connect_callback_(make_error_code(Net::Error::ENET_PEER_CREATION));
         return;
     }
@@ -93,33 +90,54 @@ void Client::connect(const char* ip, std::uint16_t port, std::string username, s
     peer_ = std::move(peer);
 }
 
-void Client::disconnect(std::chrono::seconds timeout, DisconnectCallback callback)
+void Client::disconnect(std::chrono::seconds timeout)
 {
+    if(connecting())
+    {
+        logger()->info("Aborting connection attempt");
+        peer_.reset();
+        connect_callback_(make_error_code(Net::Error::TIMED_OUT));
+        disconnect_callback_({});
+        return;
+    }
+
     if(!connected())
         return;
 
-    disconnect_callback_ = std::move(callback);
+    logger()->info("Disconnecting from server");
+
     disconnect_timeout_ = timeout;
 
     enet_peer_disconnect(peer_.get(), static_cast<std::uint32_t>(Net::C_DisconnectCode::USER_DISCONNECT));
     disconnection_start_time_ = Clock::now();
 }
 
-void Client::abort_connect()
+void Client::unhook()
 {
-    if(!connecting())
-        return;
+    hooking_ = false;
 
-    peer_.reset();
-    connect_callback_(make_error_code(Net::Error::TIMED_OUT));
+    rcv_queue_ = {};
+    snd_queue_ = {};
+    net64_header_ = {};
+    mem_hdl_ = {};
+
+    disconnect(std::chrono::seconds(2));
+
+    logger()->info("Unhooked");
 }
 
 void Client::tick()
 {
-    if(Clock::now() - connection_start_time_ > connect_timeout_)
+    if(hooking_)
+    {
+        try_hook();
+        return;
+    }
+
+    if(connecting() && Clock::now() - connection_start_time_ > connect_timeout_)
     {
         // Connection timed out
-        abort_connect();
+        disconnect(std::chrono::seconds(0));
     }
     if(disconnecting() && (Clock::now() - disconnection_start_time_) > disconnect_timeout_)
     {
@@ -134,11 +152,15 @@ void Client::tick()
         switch(evt.type)
         {
         case ENET_EVENT_TYPE_CONNECT:
-            connect_callback_({});
+            logger()->info("Established connection");
+            if(connect_callback_)
+                connect_callback_({});
             on_connect();
             break;
         case ENET_EVENT_TYPE_DISCONNECT:
-            disconnect_callback_({});
+            logger()->info("Disconnected from server");
+            if(disconnect_callback_)
+                disconnect_callback_({});
             on_disconnect();
             // ENet already took care of deallocation
             (void)peer_.release();
@@ -151,15 +173,23 @@ void Client::tick()
         }
     }
 
-    for(Game::MsgQueue::n64_message_t msg{}; rcv_queue_.poll(msg);)
+    if(hooked())
     {
-        on_game_message(msg);
+        for(Game::MsgQueue::n64_message_t msg{}; rcv_queue_->poll(msg);)
+        {
+            on_game_message(msg);
+        }
     }
+}
+
+bool Client::hooked() const
+{
+    return net64_header_.valid();
 }
 
 bool Client::connecting() const
 {
-    return (peer_ != nullptr && !connected());
+    return (peer_ != nullptr && peer_->state == ENET_PEER_STATE_CONNECTING);
 }
 
 bool Client::connected() const
@@ -177,9 +207,31 @@ bool Client::disconnected() const
     return !peer_;
 }
 
-bool Client::game_initialized(Memory::MemHandle mem_hdl)
+void Client::try_hook()
 {
-    return (mem_hdl.read<u32>(Game::FixedAddr::MAGIC_NUMBER) == Game::MAGIC_NUMBER);
+    if(mem_hdl_->read<u32>(Game::FixedAddr::MAGIC_NUMBER) != Game::MAGIC_NUMBER)
+        return;
+
+    hooking_ = false;
+
+    net64_header_ = {*mem_hdl_, mem_hdl_->read<n64_addr_t>(Game::FixedAddr::HEADER_PTR)};
+    rcv_queue_ = Game::MsgQueue::Receiver(net64_header_->field(&Game::net64_header_t::receive_queue));
+    snd_queue_ = Game::MsgQueue::Sender(net64_header_->field(&Game::net64_header_t::send_queue));
+
+    if(net64_header_->field(&Game::net64_header_t::compat_version) != Game::CLIENT_COMPAT_VER)
+    {
+        logger()->error("Incompatible patch version. Patch version: {}, Client version: {}",
+                        net64_header_->field(&Game::net64_header_t::compat_version).read(),
+                        Game::CLIENT_COMPAT_VER);
+        hooked_callback_(make_error_code(Net64::ClientError::INCOMPATIBLE_GAME));
+        return;
+    }
+
+    logger()->info("Initialized Net64 client version {} (Compatibility: {})",
+                   net64_header_->field(&Game::net64_header_t::version).read(),
+                   net64_header_->field(&Game::net64_header_t::compat_version).read());
+
+    hooked_callback_({});
 }
 
 void Client::on_connect()

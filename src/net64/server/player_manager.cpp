@@ -54,7 +54,7 @@ void PlayerManager::on_message(const Net::C_Handshake& msg, Server&, Player& sen
 
     // Store username and get an id
     sender.name = msg.name;
-    sender.id = std::move(IdHandle<Net::player_id_t>(player_ids_));
+    sender.id = IdHandle<Net::player_id_t>(player_ids_);
 
     logger()->info("Received handshake from {} (name={} id={} version={})",
                    Net::format_ip4(sender.peer().address),

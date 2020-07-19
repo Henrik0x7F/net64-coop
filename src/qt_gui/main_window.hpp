@@ -53,18 +53,24 @@ private slots:
 
     void on_emulator_settings();
 
-    void on_start_server_btn_pressed();
     void on_connect_btn_pressed();
     void on_disconnect_btn_pressed();
     void on_stop_server_btn_pressed();
+    void on_host_server_checked(int state);
+    void on_host_port_changed(int port);
 
+    // Emulator events
     void on_emulator_state(Net64::Emulator::State state);
     void on_emulator_started();
     void on_emulator_paused();
     void on_emulator_unpaused();
     void on_emulator_joinable();
 
+    // Client events
+    void on_hooked(std::error_code ec);
     void on_chat_message(std::string sender, std::string message);
+    void on_connected(std::error_code ec);
+    void on_disconnected(std::error_code ec);
 
 
     void setup_menus();
@@ -114,7 +120,9 @@ private:
     std::vector<std::byte> rom_image_;
     std::unique_ptr<Net64::Emulator::Mupen64Plus> emulator_;
     std::atomic<Net64::Emulator::State> emu_state_{Net64::Emulator::State::STOPPED};
-    Net64Thread net64_thread_;
+    Net64::Client client_;
+    std::optional<Net64::Server> server_;
+    //Net64Thread net64_thread_;
     bool reload_emulator_after_stop_{};
 
     CLASS_LOGGER_("frontend")

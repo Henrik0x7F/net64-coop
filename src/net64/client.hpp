@@ -53,8 +53,8 @@ namespace Net64
 
 struct ClientSharedData
 {
-    Memory::MemHandle mem_hdl;
-    Game::MsgQueue::Sender& send_queue;
+    std::optional<Memory::MemHandle> mem_hdl;
+    std::optional<Game::MsgQueue::Sender>& send_queue;
     LocalPlayer& local_player;
     std::unordered_map<Net::player_id_t, RemotePlayer>& remote_players;
 };
@@ -75,11 +75,12 @@ struct Client
     using PeerHandle = ResourceHandle<&enet_peer_reset>;
     using PacketHandle = ResourceHandle<&enet_packet_destroy>;
 
+    using HookedCallback = std::function<void(std::error_code)>;
     using ConnectCallback = std::function<void(std::error_code)>;
     using DisconnectCallback = std::function<void(std::error_code)>;
     using ChatCallback = ChatClient::ChatCallback;
 
-    explicit Client(Memory::MemHandle mem_hdl);
+    Client();
 
     Client(Client&&) = default;
     Client& operator=(Client&&) = default;
@@ -88,10 +89,10 @@ struct Client
 
     void set_chat_callback(ChatCallback fn);
 
-    void connect(const char* ip, std::uint16_t port, std::string username, std::chrono::seconds timeout, ConnectCallback callback);
-    void disconnect(std::chrono::seconds timeout, DisconnectCallback callback);
-
-    void abort_connect();
+    void hook(Memory::MemHandle mem_hdl, HookedCallback fn);
+    void connect(const char* ip, std::uint16_t port, std::string username, std::chrono::seconds timeout, ConnectCallback connect_callback, DisconnectCallback disconnect_callback);
+    void disconnect(std::chrono::seconds timeout);
+    void unhook();
 
     void send(const INetMessage& msg);
 
@@ -99,6 +100,7 @@ struct Client
 
     ClientSharedData get_client_shared_data(Badge<ClientDataAccess>);
 
+    [[nodiscard]] bool hooked() const;
     [[nodiscard]] bool connecting() const;
     [[nodiscard]] bool connected() const;
     [[nodiscard]] bool disconnecting() const;
@@ -107,10 +109,8 @@ struct Client
     std::string username() const;
     const std::unordered_map<Net::player_id_t, RemotePlayer>& remote_players() const;
 
-
-    static bool game_initialized(Memory::MemHandle mem_hdl);
-
 private:
+    void try_hook();
     void on_connect();
     void on_disconnect();
     void on_net_message(const ENetPacket& packet);
@@ -132,10 +132,11 @@ private:
     }
 
     // SM64
-    Memory::MemHandle mem_hdl_;
+    std::optional<Memory::MemHandle> mem_hdl_;
     Memory::Ptr<Game::net64_header_t> net64_header_;
-    Game::MsgQueue::Receiver rcv_queue_;
-    Game::MsgQueue::Sender snd_queue_;
+    std::optional<Game::MsgQueue::Receiver> rcv_queue_;
+    std::optional<Game::MsgQueue::Sender> snd_queue_;
+    bool hooking_{};
 
     // ENet
     HostHandle host_;
@@ -148,6 +149,7 @@ private:
     std::chrono::seconds disconnect_timeout_;
 
     // Callbacks
+    HookedCallback  hooked_callback_;
     ConnectCallback connect_callback_;
     DisconnectCallback disconnect_callback_;
 

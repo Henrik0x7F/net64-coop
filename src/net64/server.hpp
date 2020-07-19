@@ -82,7 +82,7 @@ private:
     template<typename T>
     void add_component(T* component)
     {
-        components_.emplace_back(component, [](void* component) { delete reinterpret_cast<T*>(component); });
+        components_.push_back({component, [](void* component) { delete reinterpret_cast<T*>(component); }});
 
         if constexpr(std::is_base_of_v<ServerMessageHandler, T>)
             message_handlers_.push_back(component);

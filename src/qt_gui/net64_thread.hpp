@@ -17,7 +17,7 @@
 #include "net64/net64.hpp"
 #include "qt_gui/app_settings.hpp"
 
-
+#if 0
 namespace Frontend
 {
 struct Net64Obj : QObject
@@ -25,6 +25,8 @@ struct Net64Obj : QObject
     Q_OBJECT
 
 public:
+    using Clock = std::chrono::steady_clock;
+
     static constexpr std::chrono::milliseconds CLIENT_INTERV{25};
 
     explicit Net64Obj(AppSettings& config);
@@ -59,6 +61,8 @@ private:
     std::optional<Net64::Server> server_;
 
     bool initializing_net64_{false};
+    bool stopping_server_{false};
+    Clock::time_point stop_server_time_;
 
     CLASS_LOGGER_("net64-thread")
 };
@@ -123,3 +127,4 @@ private:
 };
 
 } // namespace Frontend
+#endif

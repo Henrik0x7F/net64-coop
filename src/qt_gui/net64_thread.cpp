@@ -6,7 +6,7 @@
 //
 
 #include "qt_gui/net64_thread.hpp"
-
+#if 0
 
 static std::string error_msg(std::error_code ec)
 {
@@ -47,9 +47,13 @@ void Net64Obj::connect(std::string username, std::string ip, std::uint16_t port)
 {
     assert(client_.has_value() && client_->disconnected());
 
-    client_->connect(ip.c_str(), port, username.c_str(), std::chrono::seconds(5), [this](auto ec)
+    client_->connect(ip.c_str(), port, std::move(username), std::chrono::seconds(5), [this](auto ec)
     {
                          connected(ec);
+    },
+    [this](auto)
+    {
+            disconnected();
     });
 }
 
@@ -59,7 +63,7 @@ void Net64Obj::disconnect()
 
     if(client_->connecting())
     {
-        client_->abort_connect();
+        //client_->abort_connect();
     }
     else if(client_->disconnected())
     {
@@ -67,7 +71,7 @@ void Net64Obj::disconnect()
     }
     else if(client_->connected())
     {
-        client_->disconnect(std::chrono::seconds(5), [this](auto) { disconnected(); });
+        client_->disconnect(std::chrono::seconds(5));
     }
 }
 
@@ -87,7 +91,7 @@ void Net64Obj::tick()
 {
     if(initializing_net64_)
     {
-        if(Net64::Client::game_initialized(*memory_hdl_))
+        //if(Net64::Client::game_initialized(*memory_hdl_))
         {
             std::error_code ec;
             try
@@ -113,9 +117,20 @@ void Net64Obj::tick()
         }
     }
     if(client_.has_value())
+    {
         client_->tick();
+    }
     if(server_.has_value())
+    {
         server_->tick();
+
+        if(stopping_server_ && (Clock::now() - stop_server_time_) > std::chrono::seconds(3))
+        {
+            stopping_server_ = false;
+            server_ = {};
+            server_stopped({});
+        }
+    }
 }
 
 void Net64Obj::start_server(std::uint16_t max_slots, std::uint16_t port)
@@ -134,18 +149,24 @@ void Net64Obj::start_server(std::uint16_t max_slots, std::uint16_t port)
     {
         server_started(make_error_code(Net64::ErrorCode::UNKNOWN));
     }
+
+    server_started({});
 }
 
 void Net64Obj::stop_server()
 {
     if(server_.has_value())
     {
+        server_->accept_new(false);
         server_->disconnect_all(Net64::Net::S_DisconnectCode::SERVER_SHUTDOWN);
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-        server_ = {};
-    }
 
-    server_stopped({});
+        stop_server_time_ = Clock::now();
+        stopping_server_ = true;
+    }
+    else
+    {
+        server_stopped({});
+    }
 }
 
 
@@ -162,16 +183,20 @@ Net64Thread::Net64Thread(AppSettings& config)
 
     QObject::connect(&thread_, &QThread::finished, obj, &QObject::deleteLater);
     QObject::connect(this, &Net64Thread::s_set_config, obj, &Net64Obj::set_config);
+    QObject::connect(this, &Net64Thread::s_start_server, obj, &Net64Obj::start_server);
     QObject::connect(this, &Net64Thread::s_initialize_net64, obj, &Net64Obj::initialize_net64);
     QObject::connect(this, &Net64Thread::s_connect, obj, &Net64Obj::connect);
     QObject::connect(this, &Net64Thread::s_disconnect, obj, &Net64Obj::disconnect);
     QObject::connect(this, &Net64Thread::s_destroy_net64, obj, &Net64Obj::destroy_net64);
+    QObject::connect(this, &Net64Thread::s_stop_server, obj, &Net64Obj::stop_server);
 
+    QObject::connect(obj, &Net64Obj::server_started, this, &Net64Thread::o_server_started);
     QObject::connect(obj, &Net64Obj::net64_initialized, this, &Net64Thread::o_net64_initialized);
     QObject::connect(obj, &Net64Obj::connected, this, &Net64Thread::o_connected);
     QObject::connect(obj, &Net64Obj::disconnected, this, &Net64Thread::o_disconnected);
     QObject::connect(obj, &Net64Obj::net64_destroyed, this, &Net64Thread::o_net64_destroyed);
     QObject::connect(obj, &Net64Obj::chat_message, this, &Net64Thread::o_chat_message);
+    QObject::connect(obj, &Net64Obj::server_stopped, this, &Net64Thread::o_server_stopped);
 
     thread_.start();
 }
@@ -290,3 +315,5 @@ void Net64Thread::o_server_stopped(std::error_code ec)
 }
 
 } // namespace Frontend
+
+#endif

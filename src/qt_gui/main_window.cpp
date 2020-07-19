@@ -1,10 +1,10 @@
-﻿#include "main_window.hpp"
-#include <fstream>
+﻿#include <fstream>
 #include <string>
 
 #include <QDesktopServices>
 #include <QMessageBox>
 
+#include "main_window.hpp"
 #include "ui_main_window.h"
 
 
@@ -28,7 +28,7 @@ static void error_popup(const char* action, const QString& reason)
 }
 
 MainWindow::MainWindow(AppSettings& settings, QWidget* parent):
-    QMainWindow(parent), ui(new Ui::MainWindow), settings_(&settings), net64_thread_(*settings_)
+    QMainWindow(parent), ui(new Ui::MainWindow), settings_(&settings)//, net64_thread_(*settings_)
 {
     qRegisterMetaType<Net64::Emulator::State>("Net64::Emulator::State");
 
@@ -48,6 +48,8 @@ MainWindow::MainWindow(AppSettings& settings, QWidget* parent):
     setup_signals();
 
     setWindowTitle(QCoreApplication::applicationName() + " " + QCoreApplication::applicationVersion());
+
+    client_.set_chat_callback([this](auto a, auto b){on_chat_message(std::move(a), std::move(b));});
 
     // Start SDL event handling
     sdl_event_timer_ = new QTimer(this);
@@ -88,40 +90,39 @@ void MainWindow::reload_emulator()
 void MainWindow::on_handle_sdl_events()
 {
     SDL_EventHandler::poll_events();
+
+    client_.tick();
+
+    if(server_.has_value())
+        server_->tick();
 }
 
 void MainWindow::on_emulator_settings()
 {
 }
 
-void MainWindow::on_start_server_btn_pressed()
-{
-    logger()->info("Starting Net64 server");
-
-    ui->btn_connect_ip->setDisabled(true);
-    ui->btn_start_server->setDisabled(true);
-
-    connect(&net64_thread_, &Net64Thread::server_started, [this](auto ec)
-    {
-               if(ec)
-               {
-                   logger()->error("Failed to start server: {}", format_error_msg(ec).toStdString());
-                   error_popup("Failed to start server", format_error_msg(ec));
-                   ui->btn_connect_ip->setDisabled(false);
-                   ui->btn_start_server->setDisabled(false);
-               }
-               else
-               {
-                   logger()->info("Server started");
-                   connect_net64();
-               }
-            });
-}
-
 void MainWindow::on_connect_btn_pressed()
 {
     ui->btn_connect_ip->setDisabled(true);
-    ui->btn_start_server->setDisabled(true);
+
+    if(ui->cbx_host->isChecked())
+    {
+        // Start server
+        logger()->debug("Starting Net64 server");
+
+        try
+        {
+            server_ =
+                Net64::Server((std::uint16_t)ui->sbx_host_port->value(), (std::uint16_t)ui->sbx_max_players->value());
+        }
+        catch(const std::system_error& e)
+        {
+            logger()->error("Failed to start server:  {}", format_error_msg(e.code()).toStdString());
+            error_popup("Failed to start server", format_error_msg(e.code()));
+            ui->btn_connect_ip->setDisabled(false);
+            return;
+        }
+    }
 
     connect_net64();
 }
@@ -132,7 +133,34 @@ void MainWindow::on_disconnect_btn_pressed()
 
 void MainWindow::on_stop_server_btn_pressed()
 {
-    stop_emulation();
+    if(server_.has_value())
+    {
+        server_->accept_new(false);
+        server_->disconnect_all(Net64::Net::S_DisconnectCode::SERVER_SHUTDOWN);
+    }
+}
+
+void MainWindow::on_host_server_checked(int state)
+{
+    ui->grp_server_settings->setEnabled(state == Qt::Checked);
+    ui->tbx_join_ip->setDisabled(state == Qt::Checked);
+    ui->sbx_join_port->setDisabled(state == Qt::Checked);
+
+    if(state == Qt::Checked)
+    {
+        ui->tbx_join_ip->setText("localhost");
+        ui->btn_connect_ip->setText("Host");
+    }
+    else
+    {
+        ui->tbx_join_ip->setText("");
+        ui->btn_connect_ip->setText("Join");
+    }
+}
+
+void MainWindow::on_host_port_changed(int port)
+{
+    ui->sbx_join_port->setValue(port);
 }
 
 void MainWindow::on_emulator_state(Net64::Emulator::State state)
@@ -159,7 +187,6 @@ void MainWindow::on_emulator_state(Net64::Emulator::State state)
 
 void MainWindow::on_emulator_started()
 {
-
 }
 
 void MainWindow::on_emulator_paused()
@@ -172,18 +199,18 @@ void MainWindow::on_emulator_unpaused()
 
 void MainWindow::on_emulator_joinable()
 {
-    if(net64_thread_.is_initializing() || net64_thread_.is_initialized())
+    if(client_.hooked())
     {
-        connect_once(&net64_thread_, &Net64Thread::net64_destroyed, [this] { on_emulator_joinable(); });
-        net64_thread_.destroy_net64();
-        return;
+        client_.unhook();
+    }
+    if(server_.has_value())
+    {
+        server_ = {};
     }
 
     std::error_code ec;
     emulator_->join(ec);
     emulator_->unload_rom();
-
-    set_page(Page::SETUP);
 
     if(ec)
         error_popup("Emulation halted due to an error", format_error_msg(ec));
@@ -192,9 +219,39 @@ void MainWindow::on_emulator_joinable()
         reload_emulator();
 }
 
+void MainWindow::on_hooked(std::error_code ec)
+{
+
+}
+
 void MainWindow::on_chat_message(std::string sender, std::string message)
 {
     ui->tbx_chat_history->appendPlainText(QString::fromStdString(sender + ": " + message + '\n'));
+}
+
+void MainWindow::on_connected(std::error_code ec)
+{
+    if(ec)
+        return;
+
+    set_page(Page::IN_GAME);
+}
+
+void MainWindow::on_disconnected(std::error_code ec)
+{
+    if(ec)
+    {
+        error_popup("Connection lost", format_error_msg(ec));
+    }
+
+    set_page(Page::SETUP);
+    ui->btn_connect_ip->setEnabled(true);
+
+    if(server_.has_value())
+    {
+        // Local server, destroy it
+        server_ = {};
+    }
 }
 
 void MainWindow::setup_menus()
@@ -233,12 +290,11 @@ void MainWindow::setup_signals()
     connect(this, &MainWindow::emulator_paused, this, &MainWindow::on_emulator_paused);
     connect(this, &MainWindow::emulator_unpaused, this, &MainWindow::on_emulator_unpaused);
     connect(this, &MainWindow::emulator_joinable, this, &MainWindow::on_emulator_joinable);
+    connect(ui->cbx_host, &QCheckBox::stateChanged, this, &MainWindow::on_host_server_checked);
+    connect(ui->sbx_host_port, qOverload<int>(&QSpinBox::valueChanged), this, &MainWindow::on_host_port_changed);
 
     connect(ui->btn_connect_ip, &QPushButton::clicked, this, &MainWindow::on_connect_btn_pressed);
-    connect(ui->btn_start_server, &QPushButton::clicked, this, &MainWindow::on_start_server_btn_pressed);
     connect(ui->btn_stop, &QPushButton::clicked, this, &MainWindow::on_stop_server_btn_pressed);
-
-    connect(&net64_thread_, &Net64Thread::chat_message, this, &MainWindow::on_chat_message);
 }
 
 void MainWindow::set_page(Page page)
@@ -314,53 +370,50 @@ void MainWindow::destroy_emulator()
 
 void MainWindow::connect_net64()
 {
+    // Start emulation
     if(!emulator_ || emulator_->state() == Net64::Emulator::State::STOPPED)
     {
-        // Emulator not running, start it
         connect_once(this, &MainWindow::emulator_started, [this] { connect_net64(); });
         start_emulation();
         return;
     }
-    if(!net64_thread_.is_initialized())
+    // Hook
+    if(!client_.hooked())
     {
         // Net64 not yet initialized
-        connect_once(&net64_thread_, &Net64Thread::net64_initialized, [this](auto ec) {
+        client_.hook(Net64::Memory::MemHandle(*emulator_), [this](auto ec)
+        {
             if(ec)
             {
-                if(ec != make_error_code(std::errc::timed_out))
-                    error_popup("Failed to initialize Net64", format_error_msg(ec));
+                error_popup("Failed to initialize client", format_error_msg(ec));
+                return;
             }
             else
             {
                 connect_net64();
             }
+            on_hooked(ec);
         });
-        net64_thread_.initialize_net64(emulator_.get());
         return;
     }
-
     // Connect to server
-    if(!net64_thread_.is_connected())
+    if(client_.disconnected())
     {
-        connect_once(&net64_thread_, &Net64Thread::connected, [this](auto ec)
+        client_.connect(ui->tbx_join_ip->text().toStdString().c_str(), (std::uint16_t)ui->sbx_join_port->value(), settings_->username, std::chrono::seconds(3), [this](auto ec)
         {
-                         if(ec)
-                         {
-                             error_popup("Failed to connect to server", format_error_msg(ec));
-                         }
-                         else
-                         {
-                             connect_net64();
-                         }
-                     });
-        if(net64_thread_.is_server_running())
-            net64_thread_.connect(settings_->username, "localhost", (std::uint16_t)ui->sbx_host_port->value());
-        else
-            net64_thread_.connect(settings_->username, ui->tbx_join_ip->text().toStdString(), (std::uint16_t)ui->sbx_join_port->value());
+            // On connect
+            on_connected(ec);
+        },
+        [this](auto ec)
+        {
+            // On disconnect
+            on_disconnected(ec);
+        });
         return;
     }
 
     // Connected
+    logger()->info("Connected");
 }
 
 } // namespace Frontend

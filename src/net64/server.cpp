@@ -8,6 +8,7 @@
 #include "net64/net/errors.hpp"
 #include "net64/server/player.hpp"
 #include "net64/server/player_manager.hpp"
+#include "net64/server/chat_server.hpp"
 #include "server.hpp"
 
 
@@ -21,6 +22,11 @@ Server::Server(std::uint16_t port, std::size_t max_peers)
 
     if(!host_)
         throw std::system_error(make_error_code(Net::Error::ENET_HOST_CREATION));
+
+    add_component(new PlayerManager);
+    add_component(new ChatServer);
+
+    logger()->info("Created server (port={} max_peers={})", port, max_peers);
 }
 
 Server::~Server()
@@ -46,26 +52,32 @@ void Server::tick()
         case ENET_EVENT_TYPE_CONNECT:
             if(!accept_new_)
             {
+                logger()->info("Refusing connection attempt from {}. Server not accepting new clients", Net::format_ip4(evt.peer->address));
                 enet_peer_disconnect(evt.peer, static_cast<std::uint32_t>(Net::S_DisconnectCode::NOT_ACCEPTED));
                 break;
             }
             if(host_->connectedPeers >= max_peers_)
             {
+                logger()->info("Refusing connection attempt from {}. Server full", Net::format_ip4(evt.peer->address));
                 enet_peer_disconnect(evt.peer, static_cast<std::uint32_t>(Net::S_DisconnectCode::SERVER_FULL));
                 break;
             }
             if(evt.data != Net::PROTO_VER)
             {
+                logger()->info("Refusing connection attempt from {}. Incompatible version (Client={} Server={})", Net::format_ip4(evt.peer->address), evt.data, Net::PROTO_VER);
                 enet_peer_disconnect(evt.peer, static_cast<std::uint32_t>(Net::S_DisconnectCode::INCOMPATIBLE));
                 break;
             }
             evt.peer->data = reinterpret_cast<void*>(peer_ids_.acquire_id());
             players_[reinterpret_cast<std::uintptr_t>(evt.peer->data)] = std::make_unique<Player>(*this, *evt.peer);
+            logger()->info("New connection from {}", Net::format_ip4(evt.peer->address));
             on_connect(*evt.peer);
             break;
         case ENET_EVENT_TYPE_DISCONNECT:
+            logger()->info("{} disconnected", Net::format_ip4(evt.peer->address));
             if(!evt.peer->data)
                 break;
+            logger()->info("Player {} (id={}) left the game", player(*evt.peer).name, player(*evt.peer).id.id());
             on_disconnect(*evt.peer, static_cast<Net::C_DisconnectCode>(evt.data));
             destroy_player(*evt.peer);
             break;

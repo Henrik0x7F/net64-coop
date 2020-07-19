@@ -38,7 +38,7 @@ bool Receiver::poll(n64_message_t& msg)
 
     msg.msg_type = msg_ptr->field(&n64_message_t::msg_type);
     auto hdl{msg_ptr.hdl()};
-    hdl.read_raw(msg_ptr->field(&n64_message_t::msg_data).ptr().offset(), msg.msg_data, sizeof(msg.msg_data));
+    hdl->read_raw(msg_ptr->field(&n64_message_t::msg_data).ptr().offset(), msg.msg_data, sizeof(msg.msg_data));
 
     // Slot is empty now
     state_->field(&SharedState::descriptor_array)[index] = SlotState::FREE;
@@ -72,7 +72,7 @@ bool Sender::send(n64_message_t msg)
 
     msg_ptr->field(&n64_message_t::msg_type) = msg.msg_type;
     auto hdl{msg_ptr.hdl()};
-    hdl.write_raw((msg_ptr->field(&n64_message_t::msg_data)).ptr().offset(), msg.msg_data, sizeof(msg.msg_data));
+    hdl->write_raw((msg_ptr->field(&n64_message_t::msg_data)).ptr().offset(), msg.msg_data, sizeof(msg.msg_data));
 
     // Slot is in use now
     state_->field(&SharedState::descriptor_array)[index] = SlotState::IN_USE;
