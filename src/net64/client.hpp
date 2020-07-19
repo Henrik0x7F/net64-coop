@@ -95,6 +95,7 @@ struct Client
     void unhook();
 
     void send(const INetMessage& msg);
+    void send_chat_message(std::string msg);
 
     void tick();
 

@@ -163,6 +163,12 @@ void MainWindow::on_host_port_changed(int port)
     ui->sbx_join_port->setValue(port);
 }
 
+void MainWindow::on_send_chat_message()
+{
+    client_.send_chat_message(ui->tbx_chat_input->text().toStdString());
+    ui->tbx_chat_input->clear();
+}
+
 void MainWindow::on_emulator_state(Net64::Emulator::State state)
 {
     auto old_state{emu_state_.load()};
@@ -226,7 +232,7 @@ void MainWindow::on_hooked(std::error_code ec)
 
 void MainWindow::on_chat_message(std::string sender, std::string message)
 {
-    ui->tbx_chat_history->appendPlainText(QString::fromStdString(sender + ": " + message + '\n'));
+    ui->tbx_chat_history->appendPlainText(QString::fromStdString(sender + ": " + message));
 }
 
 void MainWindow::on_connected(std::error_code ec)
@@ -295,6 +301,8 @@ void MainWindow::setup_signals()
 
     connect(ui->btn_connect_ip, &QPushButton::clicked, this, &MainWindow::on_connect_btn_pressed);
     connect(ui->btn_stop, &QPushButton::clicked, this, &MainWindow::on_stop_server_btn_pressed);
+    connect(ui->btn_send_chat, &QPushButton::clicked, this, &MainWindow::on_send_chat_message);
+    connect(ui->tbx_chat_input, &QLineEdit::returnPressed, this, &MainWindow::on_send_chat_message);
 }
 
 void MainWindow::set_page(Page page)
@@ -399,7 +407,7 @@ void MainWindow::connect_net64()
     // Connect to server
     if(client_.disconnected())
     {
-        client_.connect(ui->tbx_join_ip->text().toStdString().c_str(), (std::uint16_t)ui->sbx_join_port->value(), settings_->username, std::chrono::seconds(3), [this](auto ec)
+        client_.connect(ui->tbx_join_ip->text().toStdString().c_str(), (std::uint16_t)ui->sbx_join_port->value(), settings_->username, std::chrono::seconds(5), [this](auto ec)
         {
             // On connect
             on_connected(ec);

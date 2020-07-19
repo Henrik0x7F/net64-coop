@@ -147,7 +147,7 @@ void Client::tick()
         disconnect_callback_({});
     }
 
-    for(ENetEvent evt; enet_host_service(host_.get(), &evt, Net::CLIENT_SERVICE_WAIT) > 0;)
+    for(ENetEvent evt; enet_host_service(host_.get(), &evt, 0) > 0;)
     {
         switch(evt.type)
         {
@@ -295,6 +295,11 @@ void Client::send(const INetMessage& msg)
     PacketHandle packet(enet_packet_create(strm.str().data(), strm.str().size(), Net::channel_flags(msg.channel())));
 
     enet_peer_send(peer_.get(), static_cast<std::uint8_t>(msg.channel()), packet.release());
+}
+
+void Client::send_chat_message(std::string msg)
+{
+    chat_client_->send(*this, std::move(msg));
 }
 
 ClientSharedData Client::get_client_shared_data(Badge<ClientDataAccess>)

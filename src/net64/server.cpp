@@ -45,7 +45,7 @@ Server::~Server()
 
 void Server::tick()
 {
-    for(ENetEvent evt{}; enet_host_service(host_.get(), &evt, Net::SERVER_SERVICE_WAIT) > 0;)
+    for(ENetEvent evt{}; enet_host_service(host_.get(), &evt, 0) > 0;)
     {
         switch(evt.type)
         {

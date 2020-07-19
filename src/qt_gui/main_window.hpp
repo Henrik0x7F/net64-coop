@@ -58,6 +58,7 @@ private slots:
     void on_stop_server_btn_pressed();
     void on_host_server_checked(int state);
     void on_host_port_changed(int port);
+    void on_send_chat_message();
 
     // Emulator events
     void on_emulator_state(Net64::Emulator::State state);
