@@ -36,23 +36,16 @@ struct IMessage : Factory<BaseMessage, Identifier, BaseMessage*>
         id_t message_id{};
         std::unique_ptr<BaseMessage> message;
 
-        try
-        {
-            cereal::PortableBinaryInputArchive ar(strm);
+        cereal::PortableBinaryInputArchive ar(strm);
 
-            // Read message type
-            ar(message_id);
+        // Read message type
+        ar(message_id);
 
-            // Construct message object
-            message.reset(IMessage::make(message_id));
+        // Construct message object
+        message.reset(IMessage::make(message_id));
 
-            // Parse message
-            message->parse_msg(ar);
-        }
-        catch(const std::exception& e)
-        {
-            return nullptr;
-        }
+        // Parse message
+        message->parse_msg(ar);
 
         return message.release();
     }
