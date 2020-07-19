@@ -35,12 +35,12 @@ Server::~Server()
     connection_event_handlers_.clear();
     tick_handlers_.clear();
 
+    reset_all();
+
     for(auto& iter : components_)
     {
         iter.deleter(iter.component);
     }
-
-    reset_all();
 }
 
 void Server::tick()
