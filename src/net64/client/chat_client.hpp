@@ -13,7 +13,7 @@
 
 namespace Net64
 {
-struct ChatClient : ClientMessageHandler::Derive<ChatClient>::Receive<Net::S_ChatMessage>
+struct ChatClient : ClientMessageHandler::Derive<ChatClient>::Receive<Net::S_ChatMessage, Net::S_ClientConnected, Net::S_ClientDisconnected>
 {
     using ChatCallback = std::function<void(const std::string& sender, const std::string& msg)>;
 
@@ -22,6 +22,10 @@ struct ChatClient : ClientMessageHandler::Derive<ChatClient>::Receive<Net::S_Cha
     void send(Client& client, std::string message);
 
     void on_message(const Net::S_ChatMessage& msg, Client& client);
+
+    void on_message(const Net::S_ClientConnected& msg, Client& client);
+
+    void on_message(const Net::S_ClientDisconnected& msg, Client& client);
 
 private:
     ChatCallback callback_;

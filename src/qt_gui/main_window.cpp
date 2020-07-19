@@ -232,7 +232,15 @@ void MainWindow::on_hooked(std::error_code ec)
 
 void MainWindow::on_chat_message(std::string sender, std::string message)
 {
-    ui->tbx_chat_history->appendPlainText(QString::fromStdString(sender + ": " + message));
+    if(sender.empty())
+    {
+        // Server message
+        ui->tbx_chat_history->appendPlainText(QString::fromStdString("[Server] " + message));
+    }
+    else
+    {
+        ui->tbx_chat_history->appendPlainText(QString::fromStdString('<' + sender + "> " + message));
+    }
 }
 
 void MainWindow::on_connected(std::error_code ec)

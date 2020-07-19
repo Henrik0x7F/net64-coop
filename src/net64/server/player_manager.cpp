@@ -8,6 +8,7 @@
 #include "net64/net/messages_server.hpp"
 #include "net64/server/player.hpp"
 #include "player_manager.hpp"
+#include "net64/server.hpp"
 
 
 using Clock = std::chrono::steady_clock;
@@ -31,7 +32,7 @@ void PlayerManager::on_disconnect(Server&, Player& player, Net::C_DisconnectCode
     player.broadcast(snd_msg);
 }
 
-void PlayerManager::on_message(const Net::C_Handshake& msg, Server&, Player& sender)
+void PlayerManager::on_message(const Net::C_Handshake& msg, Server& server, Player& sender)
 {
     // Check if player already got a player id
     if(sender.id.has_id())
@@ -66,6 +67,17 @@ void PlayerManager::on_message(const Net::C_Handshake& msg, Server&, Player& sen
     {
         Net::S_Handshake snd_msg;
         snd_msg.local_player_id = sender.id.id();
+        sender.send(snd_msg);
+    }
+
+    // Send list of already connected players back
+    {
+        Net::S_PlayerList snd_msg;
+        snd_msg.players.reserve(server_data(server).players.size());
+        for(const auto& player : server_data(server).players)
+        {
+            snd_msg.players.push_back({player.second->id.id(), player.second->name});
+        }
         sender.send(snd_msg);
     }
 

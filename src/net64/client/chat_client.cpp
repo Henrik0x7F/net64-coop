@@ -20,7 +20,15 @@ void ChatClient::on_message(const Net::S_ChatMessage& msg, Client& client)
 
     try
     {
-        callback_(client.remote_players().at(msg.sender).name, msg.message);
+        if(msg.sender == 0)
+        {
+            // Server message, leave sender empty
+            callback_("", msg.message);
+        }
+        else
+        {
+            callback_(client.remote_players().at(msg.sender).name, msg.message);
+        }
     }
     catch(const std::out_of_range& e)
     {
@@ -39,4 +47,28 @@ void ChatClient::send(Client& client, std::string message)
     snd_msg.message = std::move(message);
     client.send(snd_msg);
 }
+
+void ChatClient::on_message(const Net::S_ClientConnected& msg, Client& client)
+{
+    if(!callback_)
+        return;
+
+    callback_("", msg.name + " joined");
+}
+
+void ChatClient::on_message(const Net::S_ClientDisconnected& msg, Client& client)
+{
+    if(!callback_)
+        return;
+
+    try
+    {
+        callback_("", client.remote_players().at(msg.player).name + " left");
+    }
+    catch(const std::out_of_range& e)
+    {
+        logger()->warn("Unknown player id left");
+    }
+}
+
 }

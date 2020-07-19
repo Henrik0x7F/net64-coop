@@ -19,7 +19,7 @@ namespace Net64::Net
 NET_MESSAGE_(S_ChatMessage, NetMessageId::SERVER_CHAT_MESSAGE, Channel::META)
 {
     std::string message;
-    player_id_t sender;
+    player_id_t sender; // player id of 0 means it's a server message
 
     NET_SERIALIZE_(sender, message)
 };
