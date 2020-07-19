@@ -80,9 +80,6 @@ public:
         using Base = std::conditional_t<INHERIT_FROM_BASE, TBase, Empty>;
         using Base::Base;
 
-        [[maybe_unused]] static bool s_registered;
-        using ValueUser = DummyUser<const bool&, s_registered>;
-
         struct Private
         {
             friend RegisterConst;
@@ -96,6 +93,9 @@ public:
                 return true;
             }
         };
+
+        [[maybe_unused]] inline static bool s_registered{Private::register_class()};
+        using ValueUser = DummyUser<const bool*, &s_registered>;
     };
 
     template<typename TRegistrar, bool INHERIT_FROM_BASE = true>
@@ -106,9 +106,6 @@ public:
     private:
         using Base = std::conditional_t<INHERIT_FROM_BASE, TBase, Empty>;
         using Base::Base;
-
-        [[maybe_unused]] static bool s_registered;
-        using ValueUser = DummyUser<const bool&, s_registered>;
 
         struct Private
         {
@@ -123,15 +120,8 @@ public:
                 return true;
             }
         };
+
+        [[maybe_unused]] inline static bool s_registered{Private::register_class()};
+        using ValueUser = DummyUser<const bool*, &s_registered>;
     };
 };
-
-template<typename TBase, typename TKey, typename TPtr, typename... TArgs>
-template<typename TRegistrar, auto KEY, bool V>
-bool Factory<TBase, TKey, TPtr, TArgs...>::RegisterConst<TRegistrar, KEY, V>::s_registered{
-    Factory<TBase, TKey, TPtr, TArgs...>::RegisterConst<TRegistrar, KEY, V>::Private::register_class()};
-
-template<typename TBase, typename TKey, typename TPtr, typename... TArgs>
-template<typename TRegistrar, bool V>
-bool Factory<TBase, TKey, TPtr, TArgs...>::RegisterDyn<TRegistrar, V>::s_registered{
-    Factory<TBase, TKey, TPtr, TArgs...>::RegisterDyn<TRegistrar, V>::Private::register_class()};
