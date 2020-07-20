@@ -37,7 +37,7 @@ MainWindow::MainWindow(AppSettings& settings, QWidget* parent):
     setFixedSize(size());
     ui->statusbar->setSizeGripEnabled(false);
     ui->statusbar->addWidget(statustext_ = new QLabel);
-    statustext_->setText("Ready");
+    update_statustext();
 
     set_page(Page::SETUP);
 
@@ -138,24 +138,22 @@ void MainWindow::on_stop_server_btn_pressed()
         server_->accept_new(false);
         server_->disconnect_all(Net64::Net::S_DisconnectCode::SERVER_SHUTDOWN);
     }
+    else
+    {
+        client_.disconnect(std::chrono::seconds(3));
+    }
 }
 
 void MainWindow::on_host_server_checked(int state)
 {
-    ui->grp_server_settings->setEnabled(state == Qt::Checked);
-    ui->tbx_join_ip->setDisabled(state == Qt::Checked);
-    ui->sbx_join_port->setDisabled(state == Qt::Checked);
+    bool c{state == Qt::Checked};
 
-    if(state == Qt::Checked)
-    {
-        ui->tbx_join_ip->setText("localhost");
-        ui->btn_connect_ip->setText("Host");
-    }
-    else
-    {
-        ui->tbx_join_ip->setText("");
-        ui->btn_connect_ip->setText("Join");
-    }
+    ui->grp_server_settings->setEnabled(c);
+    ui->tbx_join_ip->setDisabled(c);
+    ui->sbx_join_port->setDisabled(c);
+    ui->tbx_join_ip->setText(c ? "localhost" : "");
+    ui->btn_connect_ip->setText(c ? "Host" : "Join");
+    ui->btn_stop->setText(c ? "Stop server" : "Disconnect");
 }
 
 void MainWindow::on_host_port_changed(int port)
@@ -193,6 +191,7 @@ void MainWindow::on_emulator_state(Net64::Emulator::State state)
 
 void MainWindow::on_emulator_started()
 {
+    update_statustext();
 }
 
 void MainWindow::on_emulator_paused()
@@ -214,6 +213,8 @@ void MainWindow::on_emulator_joinable()
         server_ = {};
     }
 
+    ui->btn_connect_ip->setEnabled(true);
+
     std::error_code ec;
     emulator_->join(ec);
     emulator_->unload_rom();
@@ -223,11 +224,13 @@ void MainWindow::on_emulator_joinable()
 
     if(reload_emulator_after_stop_)
         reload_emulator();
+
+    update_statustext();
 }
 
-void MainWindow::on_hooked(std::error_code ec)
+void MainWindow::on_hooked(std::error_code)
 {
-
+    update_statustext();
 }
 
 void MainWindow::on_chat_message(std::string sender, std::string message)
@@ -245,6 +248,8 @@ void MainWindow::on_chat_message(std::string sender, std::string message)
 
 void MainWindow::on_connected(std::error_code ec)
 {
+    update_statustext();
+
     if(ec)
         return;
 
@@ -253,6 +258,9 @@ void MainWindow::on_connected(std::error_code ec)
 
 void MainWindow::on_disconnected(std::error_code ec)
 {
+    update_statustext();
+    ui->tbx_chat_history->clear();
+
     if(ec)
     {
         error_popup("Connection lost", format_error_msg(ec));
@@ -308,6 +316,7 @@ void MainWindow::setup_signals()
     connect(ui->sbx_host_port, qOverload<int>(&QSpinBox::valueChanged), this, &MainWindow::on_host_port_changed);
 
     connect(ui->btn_connect_ip, &QPushButton::clicked, this, &MainWindow::on_connect_btn_pressed);
+    connect(ui->tbx_join_ip, &QLineEdit::returnPressed, this, &MainWindow::on_connect_btn_pressed);
     connect(ui->btn_stop, &QPushButton::clicked, this, &MainWindow::on_stop_server_btn_pressed);
     connect(ui->btn_send_chat, &QPushButton::clicked, this, &MainWindow::on_send_chat_message);
     connect(ui->tbx_chat_input, &QLineEdit::returnPressed, this, &MainWindow::on_send_chat_message);
@@ -415,6 +424,7 @@ void MainWindow::connect_net64()
     // Connect to server
     if(client_.disconnected())
     {
+        update_statustext();
         client_.connect(ui->tbx_join_ip->text().toStdString().c_str(), (std::uint16_t)ui->sbx_join_port->value(), settings_->username, std::chrono::seconds(5), [this](auto ec)
         {
             // On connect
@@ -430,6 +440,34 @@ void MainWindow::connect_net64()
 
     // Connected
     logger()->info("Connected");
+}
+
+void MainWindow::update_statustext()
+{
+    if(client_.connected())
+    {
+        statustext_->setText("Connected");
+    }
+    else if(client_.connecting())
+    {
+        statustext_->setText("Connecting...");
+    }
+    else if(client_.disconnecting())
+    {
+        statustext_->setText("Disconnecting...");
+    }
+    else if(client_.hooked())
+    {
+        statustext_->setText("Hooked");
+    }
+    else if(emulator_ && emulator_->state() == Net64::Emulator::State::RUNNING)
+    {
+        statustext_->setText("Hooking...");
+    }
+    else
+    {
+        statustext_->setText("Ready");
+    }
 }
 
 } // namespace Frontend

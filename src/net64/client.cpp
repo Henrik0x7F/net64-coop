@@ -16,12 +16,8 @@
 
 namespace Net64
 {
-Client::Client():
-    host_{enet_host_create(nullptr, 1, Net::channel_count(), 0, 0)}
+Client::Client()
 {
-    if(!host_)
-        throw std::system_error(make_error_code(Net::Error::ENET_HOST_CREATION));
-
     // Components
     chat_client_ = new ChatClient;
     add_component(chat_client_);
@@ -68,6 +64,14 @@ void Client::connect(const char* ip, std::uint16_t port, std::string username, s
     connect_timeout_ = timeout;
     username_ = std::move(username);
 
+    host_.reset(enet_host_create(nullptr, 1, Net::channel_count(), 0, 0));
+    if(!host_)
+    {
+        logger()->error("Failed to create ENet host");
+        connect_callback_(make_error_code(Net::Error::ENET_HOST_CREATION));
+        return;
+    }
+
     ENetAddress addr;
     // @todo: check if ip is a domain or ip address
     if(enet_address_set_host(&addr, ip) != 0)
@@ -96,6 +100,7 @@ void Client::disconnect(std::chrono::seconds timeout)
     {
         logger()->info("Aborting connection attempt");
         peer_.reset();
+        host_.reset();
         connect_callback_(make_error_code(Net::Error::TIMED_OUT));
         disconnect_callback_({});
         return;
@@ -144,32 +149,38 @@ void Client::tick()
         // Disconnecting timed out
         on_disconnect();
         peer_.reset();
+        host_.reset();
         disconnect_callback_({});
     }
 
-    for(ENetEvent evt; enet_host_service(host_.get(), &evt, 0) > 0;)
+    if(host_)
     {
-        switch(evt.type)
+        for(ENetEvent evt; enet_host_service(host_.get(), &evt, 0) > 0;)
         {
-        case ENET_EVENT_TYPE_CONNECT:
-            logger()->info("Established connection");
-            if(connect_callback_)
-                connect_callback_({});
-            on_connect();
-            break;
-        case ENET_EVENT_TYPE_DISCONNECT:
-            logger()->info("Disconnected from server");
-            if(disconnect_callback_)
-                disconnect_callback_({});
-            on_disconnect();
-            // ENet already took care of deallocation
-            (void)peer_.release();
-            break;
-        case ENET_EVENT_TYPE_RECEIVE: {
-            PacketHandle packet(evt.packet);
-            on_net_message(*packet);
-            break;
-        }
+            switch(evt.type)
+            {
+            case ENET_EVENT_TYPE_CONNECT:
+                logger()->info("Established connection");
+                if(connect_callback_)
+                    connect_callback_({});
+                on_connect();
+                break;
+            case ENET_EVENT_TYPE_DISCONNECT:
+                logger()->info("Disconnected from server");
+                if(disconnect_callback_)
+                    disconnect_callback_({});
+                on_disconnect();
+                // ENet already took care of deallocation
+                (void)peer_.release();
+                host_.reset();
+                return;
+                break;
+            case ENET_EVENT_TYPE_RECEIVE: {
+                PacketHandle packet(evt.packet);
+                on_net_message(*packet);
+                break;
+            }
+            }
         }
     }
 

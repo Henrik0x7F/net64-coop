@@ -87,6 +87,8 @@ private slots:
     void connect_net64();
 
 private:
+    void update_statustext();
+
     template<typename T, typename... TArgs>
     void show_window(T*& win_ptr, TArgs&&... args)
     {
