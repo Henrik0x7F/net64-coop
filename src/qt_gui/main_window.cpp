@@ -251,7 +251,11 @@ void MainWindow::on_connected(std::error_code ec)
     update_statustext();
 
     if(ec)
+    {
+        ui->btn_connect_ip->setEnabled(true);
+        error_popup("Failed to connect", format_error_msg(ec));
         return;
+    }
 
     set_page(Page::IN_GAME);
 }
