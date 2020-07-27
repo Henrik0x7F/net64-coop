@@ -1357,69 +1357,25 @@ void Mupen64Plus::read_memory(addr_t addr, void* data, usize_t n)
 
     auto ptr{get_mem_ptr<u8>()};
 
-    // First copy the aligned chunk
-
-    // Calc unaligned leftovers
-    usize_t begin_left{BSWAP_SIZE - (addr % BSWAP_SIZE)}, end_left{(addr + n) % BSWAP_SIZE};
-
-    // Address and length of aligned part
-    addr_t aligned_addr{addr + begin_left}, aligned_len{n - end_left - (aligned_addr - addr)};
-
-
-    // Copy & bswap the aligned chunk
-    std::copy_n(ptr + aligned_addr, aligned_len, reinterpret_cast<u8*>(data) + (aligned_addr - addr));
-    Memory::bswap32(reinterpret_cast<u8*>(data) + (aligned_addr - addr), aligned_len);
-
-
-    // Take care of the unaligned beginning
-    auto begin_addr{aligned_addr - BSWAP_SIZE};
-    u32 begin_word{};
-    read(begin_addr, begin_word);
-    Memory::bswap32(&begin_word, sizeof(begin_word));
-    std::copy_n(
-        reinterpret_cast<u8*>(&begin_word) + (BSWAP_SIZE - begin_left), begin_left, reinterpret_cast<u8*>(data));
-
-    // Unaligned ending
-    auto end_addr{aligned_addr + aligned_len};
-    u32 end_word{};
-    read(end_addr, end_word);
-    Memory::bswap32(&end_word, sizeof(end_word));
-    std::copy_n(reinterpret_cast<u8*>(&end_word), end_left, reinterpret_cast<u8*>(data) + begin_left + aligned_len);
+    for(usize_t i{}; i < n; ++i)
+    {
+        addr_t real_addr{(addr + i) - (2 * ((addr + i) % BSWAP_SIZE)) + (BSWAP_SIZE - 1)};
+        reinterpret_cast<std::uint8_t*>(data)[i] = ptr[real_addr];
+    }
 }
 
 void Mupen64Plus::write_memory(addr_t addr, const void* data, usize_t n)
 {
+    logical2physical(addr);
+    check_bounds(addr, n);
+
     auto ptr{get_mem_ptr<u8>()};
 
-    // Calc unaligned padding
-    usize_t begin_padding{addr % BSWAP_SIZE}, end_padding{BSWAP_SIZE - ((addr + n) % BSWAP_SIZE)};
-
-    // Aligned chunk
-    addr_t aligned_addr{addr - begin_padding}, aligned_len{n + begin_padding + end_padding};
-
-
-    logical2physical(addr);
-    check_bounds(aligned_addr, aligned_len);
-
-
-    std::vector<u8> buf(aligned_len);
-
-    // Read leftovers from ram
-    u32 leftovers[2];
-    read(aligned_addr, leftovers[0]);
-    read(aligned_addr + aligned_len - BSWAP_SIZE, leftovers[1]);
-
-    Memory::bswap32(leftovers, sizeof(leftovers));
-
-    // Write leftovers into buffer
-    std::copy_n(reinterpret_cast<u8*>(&leftovers), sizeof(leftovers[0]), buf.begin());
-    std::copy_n(reinterpret_cast<u8*>(&leftovers[1]), sizeof(leftovers[1]), buf.end() - BSWAP_SIZE);
-
-    // Write actual data into the buffer
-    std::copy_n(reinterpret_cast<const u8*>(data), n, buf.begin() + begin_padding);
-    Memory::bswap32(buf.data(), buf.size());
-
-    std::copy_n(buf.begin(), buf.size(), ptr + aligned_addr);
+    for(usize_t i{}; i < n; ++i)
+    {
+        addr_t real_addr{(addr + i) - (2 * ((addr + i) % BSWAP_SIZE)) + (BSWAP_SIZE - 1)};
+        ptr[real_addr] = reinterpret_cast<const std::uint8_t*>(data)[i];
+    }
 }
 
 void Mupen64Plus::read(addr_t addr, u8& val)
