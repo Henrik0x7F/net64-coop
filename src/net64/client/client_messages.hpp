@@ -17,7 +17,8 @@ struct ClientMessage
 {
     enum : MsgQueue::message_type_t
     {
-        RESERVED = 0,
+        CUSTOM = 0,
+        SET_OVERLAY,
 
         COUNT
     };

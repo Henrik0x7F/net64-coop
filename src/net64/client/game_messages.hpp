@@ -17,7 +17,7 @@ struct Message
 {
     enum : MsgQueue::message_type_t
     {
-        RESERVED = 0,
+        CUSTOM = 0,
         LOG_APPEND, ///< Append text to next log message
         LOG_END,    ///< Append text to log message and print it
 
